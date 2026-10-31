@@ -51,10 +51,14 @@ var C = window.C || (window.C = {});
     });
   }
   function close(w, done) {
-    var p = w.querySelector('.gp');
+    var p = w.querySelector('.gp'), closed = false;
+    function finish() { if (closed) return; closed = true; w.remove(); if (done) done(); }
+    w.style.pointerEvents = 'none';
+    setTimeout(finish, 600);   // secours si l'animation ne tourne pas
     C.loop(function (t) {
       var u = t / 0.35;
-      if (u >= 1) { w.remove(); if (done) done(); return true; }
+      if (closed) return true;
+      if (u >= 1) { finish(); return true; }
       p.style.transform = 'scale(' + (u < 0.6 ? 1 : Math.max(0, 1 - (u - 0.6) / 0.4)) + ',' + Math.max(0.015, 1 - u * 1.6) + ')';
     });
   }
