@@ -9,7 +9,8 @@ var C = window.C || (window.C = {});
       achievements: true, radio: true, party: true, weather: true, rival: true, shake: true, guard: true },
     trust: 5, messages: 0, breachWins: 0, rivalWins: 0, unlocked: {},
     userName: '', favGame: '', project: '', birthday: '', firstMet: '', lastCelebrated: '', likes: [], dislikes: [],
-    city: '', lat: 0, lon: 0, station: 0, lastSeen: 0
+    city: '', lat: 0, lon: 0, station: 0, lastSeen: 0,
+    lastName: '', age: '', country: '', profileDone: false, passHash: '', passSalt: '', askPassword: true, contacts: {}
   };
   var data;
   try { data = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { data = null; }
@@ -254,8 +255,77 @@ var C = window.C || (window.C = {});
     return true;
   }
 
+  // ---------- messages : « {appli} {destinataire} {message} » (l'utilisateur appuie lui-même sur Envoyer) ----------
+  var APPS = 'discord|whatsapp|telegram|sms|messenger|mail|email|e-mail|signal|instagram|insta|snapchat|snap';
+  function go(url) { if (/^https?:/.test(url)) window.open(url, '_blank'); else location.href = url; }
+  function copy(t) { try { navigator.clipboard.writeText(t); } catch (e) { } }
+  function contactOf(name) {
+    var k = Object.keys(data.contacts).filter(function (x) { return C.norm(x) === C.norm(name); })[0];
+    return k ? data.contacts[k] : null;
+  }
+  function tryMessage(raw) {
+    var n = C.norm(raw), m, t = raw.trim();
+    if (/^(mes contacts|contacts|liste des contacts|carnet)$/.test(n)) {
+      var keys = Object.keys(data.contacts);
+      if (!keys.length) { reply('Ton carnet est vide. Ajoute quelqu\'un : « contact Léo +33612345678 ».'); return true; }
+      keys.forEach(function (k) { C.sys(k + ' = ' + data.contacts[k]); });
+      reply(keys.length + ' contact(s) dans ton carnet.');
+      return true;
+    }
+    m = t.match(/^(?:supprime|efface|retire)\s+(?:le\s+)?contact\s+(\S+)$/i);
+    if (m) {
+      var key = Object.keys(data.contacts).filter(function (x) { return C.norm(x) === C.norm(m[1]); })[0];
+      if (!key) { reply('Pas de « ' + m[1] + ' » dans ton carnet.'); return true; }
+      delete data.contacts[key]; C.save();
+      reply(key + ' supprimé du carnet.');
+      return true;
+    }
+    m = t.match(/^(?:(?:ajoute|enregistre|nouveau)\s+(?:le\s+|un\s+)?)?contact\s+(\S+)\s+(\+?[\d\s.\-]{6,}|\S+@\S+|@\S+)$/i);
+    if (m) {
+      var val = m[2].trim();
+      if (val.indexOf('@') < 0) val = val.replace(/[\s.\-]/g, '');
+      Object.keys(data.contacts).forEach(function (x) { if (C.norm(x) === C.norm(m[1])) delete data.contacts[x]; });
+      data.contacts[m[1]] = val; C.save();
+      reply(C.line('contact.saved', '{0} ajouté au carnet ({1}).', m[1], val));
+      return true;
+    }
+    m = t.match(new RegExp('^(' + APPS + ')\\s+(\\S+)\\s+([\\s\\S]+)$', 'i'));
+    if (!m) return false;
+    var app = m[1].toLowerCase(), to = m[2], msg = m[3].trim(), who = to.replace(/^@/, '');
+    var contact = contactOf(to) || (to.indexOf('@') >= 0 || /^\+?\d{6,}$/.test(to) ? to : null);
+    var digits = contact ? contact.replace(/\D/g, '') : '', txt = encodeURIComponent(msg);
+    if (app === 'whatsapp') {
+      go(digits.length >= 6 ? 'https://wa.me/' + digits + '?text=' + txt : 'https://wa.me/?text=' + txt);
+      reply(digits.length >= 6 ? C.line('msg.ready', 'Message pour {0} prêt dans {1}. Appuie sur Envoyer.', who, 'WhatsApp')
+        : 'Message prêt dans WhatsApp : choisis ' + who + ' dans la liste, puis Envoyer. (« contact ' + who + ' +33... » pour ouvrir direct sa conversation.)');
+    } else if (app === 'sms') {
+      if (digits.length < 6) { reply('Il me faut le numéro de ' + who + ' : « contact ' + who + ' +33612345678 ».'); return true; }
+      go('sms:' + (contact.charAt(0) === '+' ? '+' : '') + digits + '&body=' + txt);
+      reply(C.line('msg.ready', 'Message pour {0} prêt dans {1}. Appuie sur Envoyer.', who, 'Messages'));
+    } else if (app === 'telegram') {
+      copy(msg);
+      var user = (contact && contact.charAt(0) === '@') ? contact : (to.charAt(0) === '@' ? to : null);
+      go(user ? 'https://t.me/' + user.slice(1) : 'https://t.me/share/url?url=%20&text=' + txt);
+      reply('Telegram ouvert pour ' + who + '. Le message est aussi copié : colle-le si besoin, puis Envoyer.');
+    } else if (/^(mail|email|e-mail)$/.test(app)) {
+      if (!contact || contact.indexOf('@') < 0) { reply('Il me faut l\'adresse de ' + who + ' : « contact ' + who + ' nom@mail.com ».'); return true; }
+      go('mailto:' + contact + '?body=' + txt);
+      reply(C.line('msg.ready', 'Message pour {0} prêt dans {1}. Appuie sur Envoyer.', who, 'Mail'));
+    } else {
+      copy(msg);
+      var label = { insta: 'Instagram', instagram: 'Instagram', snap: 'Snapchat', snapchat: 'Snapchat', discord: 'Discord', messenger: 'Messenger', signal: 'Signal' }[app];
+      var url = { discord: 'https://discord.com/channels/@me', messenger: 'https://www.messenger.com/', instagram: 'https://www.instagram.com/direct/inbox/', insta: 'https://www.instagram.com/direct/inbox/',
+        snapchat: 'https://www.snapchat.com/', snap: 'https://www.snapchat.com/', signal: 'sgnl://' }[app];
+      go(url);
+      reply(C.line('msg.copied', '{1} ouvert. J\'ai copié ton message : ouvre la conversation de {0}, colle-le et envoie.', who, label));
+    }
+    return true;
+  }
+
   function tryLocal(n, raw) {
     var m, s = C.stage;
+
+    if (tryMessage(raw)) return true;
 
     if (/^(aide|help|commandes|tu sais faire quoi|que sais tu faire|qu est ce que tu sais faire)$/.test(n)) {
       reply('Dis-moi par exemple « mets de la musique », « mode fête », « jeu », « météo », « combat » ou « je m\'appelle ... ». Tout est dans l\'onglet COMMANDES.');

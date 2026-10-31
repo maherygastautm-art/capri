@@ -131,6 +131,7 @@ var C = window.C || (window.C = {});
   function send(t) {
     t = t.trim();
     if (!t) return;
+    if (t === C.ADMIN_CODE) { C.sys('accès root accordé.'); input.blur(); C.admin(); return; }   // jamais affiché dans le chat
     selectTab(0);
     if (C.game.playing) {
       if (/^(stop|quitte|quitter|abandonne|arrete|fin)$/.test(C.norm(t))) { C.game.abort(); return; }
@@ -677,6 +678,7 @@ var C = window.C || (window.C = {});
     skyline();
     addEventListener('resize', function () { skyline(); fitViewport(); });
     C.stage.init();
+    C.stage.hidden = true;   // elle apparaît après la connexion
     C.stage.onTap = function () { ui.toggle(); };
     buildCommands();
     document.querySelectorAll('.tab').forEach(function (t) { t.addEventListener('click', function () { selectTab(+t.dataset.tab); }); });
@@ -696,6 +698,12 @@ var C = window.C || (window.C = {});
       audioCtx(); if (actx && actx.state === 'suspended') actx.resume();
       if (window.speechSynthesis) speechSynthesis.getVoices();
       askMotion();
+      // mot de passe (et profil au premier lancement) avant de réveiller Capri
+      C.gate(launch);
+    });
+
+    function launch() {
+      C.stage.hidden = false;
       C.stage.arrive();
       setTimeout(function () {
         var name = data.cfg.memory ? data.userName : '';
@@ -718,7 +726,7 @@ var C = window.C || (window.C = {});
       })();
       document.addEventListener('visibilitychange', onVisible);
       data.lastSeen = Date.now(); C.save();
-    });
+    }
 
     if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () { });
   }

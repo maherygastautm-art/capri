@@ -113,7 +113,10 @@ var C = window.C || (window.C = {});
     'ach.list': All('Voilà ton tableau de chasse.'),
     shake: All('Hé ! Pose ce téléphone, j\'ai le tournis !'),
     breach: All('Breach Protocol lancé.'),
-    samurai: All('Debout, samouraï. On a une ville à cramer.')
+    samurai: All('Debout, samouraï. On a une ville à cramer.'),
+    'contact.saved': T(["{0}, noté. J'espère que c'est quelqu'un de fiable.", '{0} dans le carnet. Je le surveille.'], ['{0} ajouté au carnet ({1}).', "C'est noté pour {0}, choom."], ['{0} est dans le carnet. Tes amis sont mes amis.', "{0}, enregistré. Je m'en souviendrai."]),
+    'msg.ready': T(['Message pour {0} prêt dans {1}. Appuie sur Envoyer, je suis pas ta secrétaire.', '{1} est ouvert. {0} t\'attend. Envoie.'], ["Message pour {0} prêt dans {1}. T'as plus qu'à appuyer sur Envoyer.", "C'est prêt dans {1}. Un toucher sur Envoyer et {0} le reçoit."], ['Message pour {0} prêt dans {1}. Envoie quand tu veux.', 'Tout est prêt dans {1}. Dis bonjour à {0} de ma part.']),
+    'msg.copied': All("{1} ouvert. J'ai copié ton message : ouvre la conversation de {0}, colle-le et envoie.", "{1} ne me laisse pas écrire à ta place. Ton message est copié : conversation de {0}, coller, Envoyer.")
   };
 
   C.ACH = [
@@ -141,6 +144,8 @@ var C = window.C || (window.C = {});
   ];
 
   C.HELP = [
+    ["whatsapp Léo j'arrive", 'Prépare un message (whatsapp, sms, telegram, mail, discord, insta...)'],
+    ['contact Léo +33612345678', 'Ajoute un contact (numéro ou e-mail) — « mes contacts » pour la liste'],
     ['salut / ça va', 'Discussion : qui es-tu, blague, merci...'],
     ['mets de la musique', 'Radio de Night City (change de station, coupe la radio)'],
     ['mode fête', 'Néons partout, Capri danse au rythme (« stop la fête »)'],
