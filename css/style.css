@@ -211,6 +211,35 @@ button.chip.on { color: var(--cyan); border-color: var(--cyan); }
 .breach .banner b { display: block; font-size: 30px; color: var(--cyan); }
 .breach .banner span { font-family: var(--mono); font-size: 12px; }
 
+/* écran d'accès et mode admin */
+.gate { position: fixed; inset: 0; z-index: 95; background: rgba(5, 5, 8, .92); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.gate .gp { position: relative; width: min(100%, 520px); max-height: calc(var(--vh) - 32px); overflow-y: auto; background: var(--bg); border: 1px solid var(--red); padding: 18px 20px 16px;
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 22px 100%, 0 calc(100% - 22px)); user-select: text; -webkit-user-select: text; }
+.gate .gp::before { content: ''; position: absolute; left: 0; top: 0; width: 90px; height: 4px; background: var(--red); }
+.gate .gk { font-family: var(--mono); font-size: 10px; color: var(--red-dim); }
+.gate h1 { margin: 4px 0 0; font-size: 32px; color: var(--red); letter-spacing: .02em; }
+.gate .gs { margin: 2px 0 12px; font-size: 15px; color: var(--light); opacity: .85; }
+.gate .ge { font-family: var(--mono); font-size: 12px; color: var(--red); margin-top: 8px; min-height: 14px; }
+.gf { display: block; margin: 4px 0 8px; min-width: 0; }
+.gf span { display: block; font-size: 13px; color: var(--red-text); font-weight: 600; margin-bottom: 3px; }
+.gf input, .gbook { width: 100%; font-family: var(--font); font-size: 17px; font-weight: 600; color: var(--cyan); caret-color: var(--cyan); background: #160A0B;
+  border: 0; border-bottom: 1px solid var(--red); border-radius: 0; padding: 6px 8px; outline: none; -webkit-appearance: none; }
+.gbook { height: 110px; border: 1px solid var(--red); font-family: var(--mono); font-size: 14px; resize: vertical; }
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.gbtns { display: flex; justify-content: flex-end; gap: 10px; margin: 10px 0 4px; }
+.gbtns.wrap { flex-wrap: wrap; justify-content: flex-start; }
+.btn.ghost { border-color: var(--red-dim); color: var(--red-dim); }
+.gate.admin .gp { border-color: var(--yellow); width: min(100%, 600px); }
+.gate.admin .gp::before { background: var(--yellow); width: 110px; }
+.gate.admin h1 { color: var(--yellow); }
+.gate .gx { position: absolute; right: 16px; top: 18px; color: var(--red-text); border-color: var(--red); padding: 4px 10px; font-size: 13px; }
+.gtabs { display: flex; gap: 16px; border-bottom: 1px solid rgba(252, 238, 10, .5); margin: 6px 0 8px; flex-wrap: wrap; }
+.gtabs button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--red-text); font-size: 16px; font-weight: 600; padding: 2px 0; }
+.gtabs button.on { color: var(--yellow); border-bottom-color: var(--yellow); }
+.gval { font-size: 16px; color: var(--light); margin: 4px 0; }
+.grange { width: 100%; accent-color: #FCEE0A; }
+.gate .row.tg { cursor: pointer; }
+
 /* bouton pour arrêter le mode fête */
 #partyStop {
   position: fixed; z-index: 58; left: 50%; top: calc(var(--safe-t) + 48px); transform: translateX(-50%);
