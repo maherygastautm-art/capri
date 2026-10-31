@@ -1,0 +1,33 @@
+CAPRI SUR IPHONE
+================
+
+Ce dossier "mobile" contient Capri en version appli web. Pour l'avoir sur ton iPhone :
+
+1) METTRE LE DOSSIER EN LIGNE (une seule fois)
+   L'appli doit être servie en HTTPS. Le plus simple, gratuit :
+
+   Option A — GitHub Pages
+   - Crée un compte sur github.com puis un nouveau dépôt public (ex : "capri").
+   - "Add file" > "Upload files" : glisse TOUT le contenu du dossier "mobile"
+     (index.html, css, js, icons, manifest.webmanifest, sw.js), puis "Commit".
+   - Settings > Pages > Source : "Deploy from a branch", branche "main", dossier "/ (root)" > Save.
+   - Après une minute, ton adresse s'affiche : https://TON-PSEUDO.github.io/capri/
+
+   Option B — Netlify
+   - Va sur app.netlify.com/drop, crée un compte, glisse le dossier "mobile".
+   - Netlify te donne une adresse en https://....netlify.app
+
+2) L'INSTALLER SUR L'IPHONE
+   - Ouvre l'adresse dans SAFARI (pas Chrome).
+   - Touche le bouton Partager (carré avec une flèche) > "Sur l'écran d'accueil" > Ajouter.
+   - Capri apparaît avec son icône et s'ouvre en plein écran comme une vraie appli.
+
+3) À SAVOIR
+   - Au lancement, touche l'écran ("TOUCHE POUR TE CONNECTER") : c'est ce qui autorise le son.
+   - iPhone demandera l'accès aux mouvements (pour le tournis quand tu secoues) : accepte si tu veux.
+   - La voix de Capri est coupée par défaut : active-la dans PARAMÈTRES.
+   - Ses souvenirs, sa confiance et tes succès sont gardés sur le téléphone (pas sur le PC).
+   - La radio et la météo ont besoin d'Internet ; le reste marche aussi hors ligne.
+   - Les minuteurs ne sonnent que si l'appli est ouverte (limite d'iPhone).
+
+Pour une mise à jour : remplace les fichiers en ligne, puis ferme et rouvre l'appli sur l'iPhone.

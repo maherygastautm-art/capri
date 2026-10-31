@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Capri</title>
+<meta name="description" content="Capri, ta netrunneuse de poche.">
+<meta name="theme-color" content="#0A0B11">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Capri">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="bg"></canvas>
+<canvas id="stage"></canvas>
+<div id="capriHit" aria-label="Capri"></div>
+<div id="bubble" class="bubble hidden"><div class="bh">CAPRI //</div><div class="bt"></div></div>
+<div id="vexBubble" class="bubble vex hidden"><div class="bh">VEX // RIVALE</div><div class="bt"></div></div>
+
+<header id="top">
+  <div class="brand"><span class="bar"></span>CAPRI.EXE <span class="dim">// NIGHT CITY</span></div>
+  <div class="chips">
+    <button id="radioChip" class="chip" type="button">RADIO OFF</button>
+    <span id="weatherChip" class="chip hidden"></span>
+    <span id="clock" class="chip mono"></span>
+  </div>
+</header>
+
+<section id="panel" class="closed">
+  <div class="frame">
+    <div class="ph">NAVI_ARASAKA BUILD // CAPRI.EXE <span id="ver"></span></div>
+    <nav class="tabs">
+      <button class="key" data-step="-1" type="button">&lt;</button>
+      <div class="tablist">
+        <button class="tab on" data-tab="0" type="button">CHAT</button>
+        <button class="tab" data-tab="1" type="button">COMMANDES</button>
+        <button class="tab" data-tab="2" type="button">PARAMÈTRES</button>
+      </div>
+      <button class="key" data-step="1" type="button">&gt;</button>
+      <button id="closePanel" class="key close" type="button" aria-label="Fermer">▼</button>
+    </nav>
+    <div class="sep"></div>
+    <div class="pages">
+      <div class="page" id="pChat">
+        <div class="section">Liaison neuronale</div>
+        <div class="logArea">
+          <div id="game" class="hidden"></div>
+          <div id="log"></div>
+        </div>
+      </div>
+      <div class="page hidden" id="pCmds"><div class="section">Commandes — touche pour essayer</div><div id="cmds"></div></div>
+      <div class="page hidden" id="pSettings"><div id="settings"></div></div>
+    </div>
+    <div id="errorFx" class="hidden"></div>
+  </div>
+</section>
+
+<form id="inputBar" autocomplete="off">
+  <span class="prompt">&gt;</span>
+  <input id="input" type="text" enterkeyhint="send" placeholder="Parle à Capri... (ex : mets de la musique)" autocapitalize="sentences" autocorrect="on">
+  <button id="send" type="submit">ENVOYER</button>
+</form>
+
+<button id="partyStop" class="hidden" type="button">■ STOP LA FÊTE</button>
+
+<div id="fx"></div>
+
+<script src="js/figure.js"></script>
+<script src="js/data.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/stage.js"></script>
+<script src="js/brain.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

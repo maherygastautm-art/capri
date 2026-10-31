@@ -1,0 +1,420 @@
+// Cerveau : réglages + sauvegarde, personnalité, souvenirs, succès, compréhension des messages (100 % local)
+var C = window.C || (window.C = {});
+
+(function () {
+  // ---------- sauvegarde (localStorage) ----------
+  var KEY = 'capri.v1';
+  var DEFAULTS = {
+    cfg: { voice: false, wander: true, remarks: true, glitches: true, breach: true, personality: true, memory: true, anniversaries: true,
+      achievements: true, radio: true, party: true, weather: true, rival: true, shake: true, guard: true },
+    trust: 5, messages: 0, breachWins: 0, rivalWins: 0, unlocked: {},
+    userName: '', favGame: '', project: '', birthday: '', firstMet: '', lastCelebrated: '', likes: [], dislikes: [],
+    city: '', lat: 0, lon: 0, station: 0, lastSeen: 0
+  };
+  var data;
+  try { data = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { data = null; }
+  if (!data) data = {};
+  for (var k in DEFAULTS) if (data[k] === undefined) data[k] = JSON.parse(JSON.stringify(DEFAULTS[k]));
+  for (k in DEFAULTS.cfg) if (data.cfg[k] === undefined) data.cfg[k] = DEFAULTS.cfg[k];
+  if (!data.firstMet) data.firstMet = new Date().toISOString().slice(0, 10);
+  C.data = data;
+  C.save = function () { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { } };
+  C.cfg = function (key, v) { if (v !== undefined) { data.cfg[key] = v; C.save(); } return data.cfg[key]; };
+  C.resetAll = function () { try { localStorage.removeItem(KEY); } catch (e) { } location.reload(); };
+  C.save();
+
+  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function fmt(s, args) { return s.replace(/\{(\d)\}/g, function (m, i) { return args[i] != null ? args[i] : m; }); }
+  C.pick = pick;
+
+  // ---------- personnalité ----------
+  C.tier = function () { return data.trust < 25 ? 0 : data.trust < 60 ? 1 : 2; };
+  C.tierName = function () { return ['méfiante', 'complice', 'attachée'][C.tier()]; };
+  // réplique de la personnalité (ou la réplique neutre si elle est coupée)
+  C.line = function (key, normal) {
+    var args = Array.prototype.slice.call(arguments, 2), s = normal;
+    var L = C.LINES[key];
+    if (data.cfg.personality && L) { var opts = L[Math.min(C.tier(), L.length - 1)]; s = pick(opts); }
+    return fmt(s, args);
+  };
+  C.hasLine = function (key) { return data.cfg.personality && !!C.LINES[key]; };
+  C.bond = function (d) {
+    data.trust = Math.max(0, Math.min(100, data.trust + d));
+    C.save();
+    if (data.trust >= 25) C.unlock('trust25');
+    if (data.trust >= 60) C.unlock('trust60');
+  };
+
+  // ---------- succès ----------
+  C.unlock = function (id) {
+    if (!data.cfg.achievements || data.unlocked[id]) return;
+    var def = C.ACH.filter(function (a) { return a[0] === id; })[0];
+    if (!def) return;
+    data.unlocked[id] = new Date().toISOString().slice(0, 10);
+    C.save();
+    C.achPopup(def[1], def[2]);
+  };
+  C.achSummary = function () {
+    var n = C.ACH.filter(function (a) { return data.unlocked[a[0]]; }).length;
+    return ['Succès : ' + n + ' / ' + C.ACH.length].concat(C.ACH.map(function (a) { return (data.unlocked[a[0]] ? '✔ ' + a[1] + ' — ' + a[2] : '▢ ' + a[1] + ' — ???'); }));
+  };
+
+  // ---------- souvenirs ----------
+  var MONTHS = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
+  var MONTHS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  function title(s) { s = s.replace(/^[\s.!?,"«»]+|[\s.!?,"«»]+$/g, ''); return s ? s[0].toUpperCase() + s.slice(1) : s; }
+  function learned() { C.save(); C.unlock('memory'); C.bond(1); }
+
+  function tryLearn(n, raw) {
+    if (!data.cfg.memory) return null;
+    var m = raw.match(/(?:je m['’ ]?appelle|mon pr[ée]nom (?:c['’ ]?est|est)|appelle[- ]moi|tu peux m['’ ]?appeler)\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'\-]{1,20})/i);
+    if (m) { data.userName = title(m[1]); learned(); return C.line('mem.name', 'Enchantée, {0}. Je retiens.', data.userName); }
+    m = n.match(/^(?:mon )?jeu (?:prefere|favori) (?:c est|est|ce serait) (.+)$/);
+    if (m) { data.favGame = title(m[1]); learned(); return C.line('mem.game', '{0} ? Noté. Bon goût.', data.favGame); }
+    m = n.match(/^je (?:travaille|bosse|code) (?:sur|a) (.+)$/);
+    if (m) {
+      if (m[1] === 'toi' || m[1] === 'capri') return C.line('mem.onme', 'Sur moi ? Fais-moi belle, alors.');
+      data.project = title(m[1].replace(/^(un|une|le|la|les|mon|ma|mes) /, ''));
+      learned();
+      return C.line('mem.project', '{0}. Je te demanderai où t\'en es.', data.project);
+    }
+    m = n.match(new RegExp('(?:mon anniv(?:ersaire)?|je suis nee?|ma date de naissance)(?: c est| est| le| ce)* (?:le )?(\\d{1,2})(?:er)? (\\d{1,2}|' + MONTHS.join('|') + ')\\b'));
+    if (m) {
+      var d = +m[1], mo = isNaN(+m[2]) ? MONTHS.indexOf(m[2]) + 1 : +m[2];
+      if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) {
+        data.birthday = ('0' + d).slice(-2) + '/' + ('0' + mo).slice(-2);
+        learned();
+        return C.line('mem.birthday', "Le {0}. C'est gravé dans ma mémoire.", d + ' ' + MONTHS_FR[mo - 1]);
+      }
+    }
+    m = n.match(/^(?:ma ville (?:c est|est)|j habite (?:a|au|en|aux)|je vis (?:a|au|en|aux)) (.+)$/);
+    if (m) { var city = title(m[1]); C.weather.setCity(city); return C.line('mem.city', '{0}. Je surveille ton ciel, maintenant.', city); }
+    m = n.match(/^j (?:aime|adore|kiffe) (?:bien |trop |beaucoup )?(.+)$/);
+    if (m) {
+      if (data.likes.indexOf(m[1]) < 0) data.likes.push(m[1]);
+      data.likes = data.likes.slice(-20);
+      data.dislikes = data.dislikes.filter(function (x) { return x !== m[1]; });
+      learned();
+      return C.line('mem.like', "T'aimes {0}. Je retiens.", m[1]);
+    }
+    m = n.match(/^je (?:deteste|hais|supporte pas|n aime pas|aime pas) (.+)$/);
+    if (m) {
+      if (data.dislikes.indexOf(m[1]) < 0) data.dislikes.push(m[1]);
+      data.dislikes = data.dislikes.slice(-20);
+      data.likes = data.likes.filter(function (x) { return x !== m[1]; });
+      learned();
+      return C.line('mem.dislike', 'Pas fan de {0}. Noté.', m[1]);
+    }
+    if (/(comment je m appelle|c est quoi mon (nom|prenom)|tu te souviens de moi|qu est ce que tu sais sur moi|tu sais quoi sur moi|tu connais mon nom|tu te rappelles de moi)/.test(n)) return recall();
+    return null;
+  }
+
+  function recall() {
+    var p = [];
+    if (data.userName) p.push("tu t'appelles " + data.userName);
+    if (data.favGame) p.push("ton jeu préféré, c'est " + data.favGame);
+    if (data.project) p.push('tu bosses sur ' + data.project);
+    if (data.birthday) p.push("ton anniversaire, c'est le " + data.birthday);
+    if (data.city) p.push('tu vis à ' + data.city);
+    if (data.likes.length) p.push("t'aimes " + data.likes.slice(-3).join(', '));
+    if (data.dislikes.length) p.push('tu supportes pas ' + data.dislikes[data.dislikes.length - 1]);
+    if (!p.length) return C.line('mem.empty', "Je sais rien de toi pour l'instant. Dis-moi « je m'appelle ... » pour commencer.");
+    return C.line('mem.recall', 'Voilà ce que je sais : {0}.', p.join(', '));
+  }
+
+  C.memRemark = function () {
+    if (!data.cfg.memory) return null;
+    var o = [];
+    if (data.favGame) o.push(C.line('mem.r.fav', 'Toujours accro à {0} ?', data.favGame));
+    if (data.project) o.push(C.line('mem.r.project', 'Alors, ça avance, {0} ?', data.project));
+    if (data.likes.length) o.push(C.line('mem.r.like', "Au fait, t'aimes toujours {0} ?", pick(data.likes)));
+    if (data.dislikes.length) o.push(C.line('mem.r.dislike', 'Je repensais à ton truc contre {0}. Je te comprends.', pick(data.dislikes)));
+    if (data.userName) o.push(C.line('mem.r.name', "{0}... t'as bu de l'eau aujourd'hui ?", data.userName));
+    return o.length ? pick(o) : null;
+  };
+
+  // anniversaire de l'utilisateur et de la rencontre (une fois par jour)
+  C.checkDates = function () {
+    if (!data.cfg.anniversaries) return;
+    var now = new Date(), key = now.toISOString().slice(0, 10);
+    if (data.lastCelebrated === key) return;
+    var dm = ('0' + now.getDate()).slice(-2) + '/' + ('0' + (now.getMonth() + 1)).slice(-2);
+    if (data.cfg.memory && data.birthday === dm) {
+      data.lastCelebrated = key; C.save();
+      C.celebrate(C.line('birthday', "Joyeux anniversaire, {0} ! Je te fais la fête.", data.userName || 'choom'));
+      C.unlock('birthday');
+      return;
+    }
+    var met = data.firstMet.split('-');
+    if (+met[1] === now.getMonth() + 1 && +met[2] === now.getDate() && now.getFullYear() > +met[0]) {
+      var y = now.getFullYear() - +met[0];
+      data.lastCelebrated = key; C.save();
+      C.celebrate(C.line('metday', "Ça fait {0} qu'on se connaît. Joyeux anniversaire de rencontre !", y + (y > 1 ? ' ans' : ' an')));
+      C.unlock('met');
+    }
+  };
+
+  // ---------- compréhension des messages ----------
+  C.norm = function (s) {
+    return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  };
+
+  var pending = null, prefix = '';
+  function reply(t) { C.reply(prefix + t); prefix = ''; }
+  function P(key) { var normal = Array.prototype.slice.call(arguments, 1); return C.line(key, pick(normal)); }
+  function ask(q, onYes) { pending = onYes; reply(q); }
+
+  function open(url) { window.open(url, '_blank'); }
+  function google(q) { open('https://www.google.com/search?q=' + encodeURIComponent(q)); }
+
+  C.handle = function (raw) {
+    var text = raw.trim();
+    if (!text) return;
+    var n = C.norm(text);
+    var polite = /\b(s il te plait|s il vous plait|stp|svp|merci)\b/.test(n);
+    prefix = '';
+    data.messages++;
+    if (data.messages >= 1) C.unlock('chat1');
+    if (data.messages >= 100) C.unlock('chat100');
+    if (data.messages >= 500) C.unlock('chat500');
+    var h = new Date().getHours();
+    if (h >= 3 && h < 5) C.unlock('night');
+    C.bond(polite ? 2 : 1);
+    if (data.cfg.personality && C.tier() === 0) {
+      if (polite) { if (Math.random() < 0.4) prefix = C.line('polite', ''); }
+      else if (/^(lance|ouvre|ferme|cherche|viens|danse|dors|bouge|fais|mets)\b/.test(n) && Math.random() < 0.3) prefix = C.line('order', '');
+    }
+    n = n.replace(/^((hey|he|ok|dis|eh|yo) )?capri\b ?/, '').trim();
+    n = n.replace(/^(s il te plait|stp|svp|peux tu|tu peux|pourrais tu|est ce que tu peux) /, '').trim();
+    n = n.replace(/ (s il te plait|stp|svp|merci|capri)$/, '').trim();
+
+    if (pending) {
+      var a = pending; pending = null;
+      if (/^(oui|ouais|ouai|yes|ok|vas y|go|d accord|carrement|bien sur|oui vas y)$/.test(n)) { a(); return; }
+      if (/^(non|nan|no|nope|laisse tomber|annule|pas la peine)$/.test(n)) { reply('Ok, laisse tomber.'); return; }
+    }
+    if (!n) { C.stage.wave(); reply(P('call', 'Oui ?', "Je t'écoute.")); return; }
+    if (tryLocal(n, text)) return;
+
+    // incompris
+    C.showError();
+    var question = text.indexOf('?') >= 0 || /^(qui|quoi|que|qu est|comment|pourquoi|quand|ou|combien|quel|quelle|quels|quelles|est ce|c est quoi|explique|definition)\b/.test(n);
+    if (question) ask(P('askgoogle', 'Ça, je sais pas y répondre toute seule. Je cherche sur Google ? (oui / non)'), function () { google(text); reply("C'est parti."); });
+    else reply(P('unknown', 'Je connais pas cette commande. Tape « aide » pour voir ce que je sais faire.'));
+  };
+
+  function tryCalc(raw) {
+    var s = raw.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim().replace(/[?!.\s]+$/, '');
+    var m = s.match(/^(?:capri[ ,]*)?(?:combien (?:font|fait|ca fait)|ca fait combien|calcule[rz]?|calcul|c est combien)\s*:?\s*(.+)$/);
+    var explicit = !!m;
+    if (m) s = m[1];
+    s = s.replace(/\bdivise(e)? par\b|\bsur\b/g, '/').replace(/\bfois\b|\bmultiplie(e)? par\b|(\d)\s*x\s*(?=[\d(])/g, function (a, b, c) { return (c || '') + '*'; })
+      .replace(/\bplus\b/g, '+').replace(/\bmoins\b/g, '-').replace(/\bpuissance\b/g, '^').replace(/\bau carre\b/g, '^2').replace(/,/g, '.').replace(/\s+/g, '');
+    if (!/^[\d.+\-*/^()]+$/.test(s)) return null;
+    if (!explicit && !/\d[+\-*/^]/.test(s)) return null;
+    var i = 0;
+    function expr() { var v = term(); while (s[i] === '+' || s[i] === '-') { var o = s[i++], r = term(); v = o === '+' ? v + r : v - r; } return v; }
+    function term() { var v = pow(); while (s[i] === '*' || s[i] === '/') { var o = s[i++], r = pow(); v = o === '*' ? v * r : v / r; } return v; }
+    function pow() { var b = un(); if (s[i] === '^') { i++; return Math.pow(b, pow()); } return b; }
+    function un() {
+      if (s[i] === '-') { i++; return -un(); }
+      if (s[i] === '(') { i++; var v = expr(); if (s[i] !== ')') throw 0; i++; return v; }
+      var st = i; while (i < s.length && /[\d.]/.test(s[i])) i++;
+      if (st === i) throw 0;
+      return parseFloat(s.slice(st, i));
+    }
+    try { var v = expr(); return i === s.length ? v : null; } catch (e) { return null; }
+  }
+
+  var NUMW = { un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10, quinze: 15, vingt: 20, trente: 30, quarante: 40, cinquante: 50, soixante: 60 };
+  var timers = [];
+  function tryTimer(n) {
+    if (/^(annule|arrete|stop|supprime)( le| les| mon| mes)? (minuteur|minuteurs|timer|timers|rappel|rappels|alarme)$/.test(n)) {
+      var c = timers.length; timers.forEach(clearTimeout); timers = [];
+      reply(c ? 'Minuteur annulé.' : "Il n'y a aucun minuteur en cours.");
+      return true;
+    }
+    if (!/\b(minuteur|timer|chrono|rappelle|rappel|previens|alarme)\b/.test(n)) return false;
+    var m = n.match(new RegExp('\\b(\\d+|' + Object.keys(NUMW).join('|') + ')\\s*(secondes?|sec|s|minutes?|mins?|mn|heures?|h)\\b(?:\\s+(?:de|d|que|pour|a|qu)\\s+(.+))?'));
+    if (!m) { reply('Dis-moi la durée, par exemple « minuteur 5 minutes ».'); return true; }
+    var amount = isNaN(+m[1]) ? NUMW[m[1]] : +m[1], unit = m[2];
+    var sec = unit[0] === 'h' ? amount * 3600 : unit[0] === 'm' ? amount * 60 : amount;
+    if (sec <= 0 || sec > 86400) { reply('Choisis une durée entre 1 seconde et 24 heures.'); return true; }
+    var what = m[3] || '';
+    var id = setTimeout(function () {
+      timers = timers.filter(function (x) { return x !== id; });
+      try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) { }
+      C.beep();
+      C.stage.come();
+      C.reply(what ? 'Rappel : ' + what + ' !' : 'Bip bip ! Le minuteur est terminé.');
+    }, sec * 1000);
+    timers.push(id);
+    var dur = amount + ' ' + (unit[0] === 'h' ? (amount > 1 ? 'heures' : 'heure') : unit[0] === 'm' ? (amount > 1 ? 'minutes' : 'minute') : (amount > 1 ? 'secondes' : 'seconde'));
+    reply((what ? 'Ok, je te rappelle dans ' + dur + ' : ' + what + '.' : 'Minuteur lancé pour ' + dur + '.') + ' Garde l\'appli ouverte.');
+    return true;
+  }
+
+  function tryLocal(n, raw) {
+    var m, s = C.stage;
+
+    if (/^(aide|help|commandes|tu sais faire quoi|que sais tu faire|qu est ce que tu sais faire)$/.test(n)) {
+      reply('Dis-moi par exemple « mets de la musique », « mode fête », « jeu », « météo », « combat » ou « je m\'appelle ... ». Tout est dans l\'onglet COMMANDES.');
+      return true;
+    }
+    if (/^(au revoir|bye|quitte|quitte toi|ferme toi|eteins toi|deconnecte toi|a plus|ciao)$/.test(n)) { reply(P('bye', 'À plus, choom.')); return true; }
+
+    var calc = tryCalc(raw);
+    if (calc != null) {
+      var v = !isFinite(calc) ? '... une division par zéro. Bien essayé' : (Math.round(calc * 1e6) / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 6 });
+      reply(C.line('calc', 'Ça fait {0}.', v));
+      return true;
+    }
+    if (tryTimer(n)) return true;
+
+    if (/^((on )?(joue|jouer|jouons)( a un jeu| avec moi| a quelque chose)?|(un |le |lance le |lance un |on fait un )?(mini ?jeu|jeu)( de hack(ing)?)?|partie)$/.test(n)) {
+      reply(P('game', 'Breach Protocol. Reproduis la séquence avant la fin du chrono.'));
+      C.game.start();
+      return true;
+    }
+    if (/^(mes )?(succes|trophees|achievements)$/.test(n)) {
+      if (!data.cfg.achievements) { reply('Les succès sont désactivés dans les paramètres.'); return true; }
+      C.achSummary().forEach(function (l) { C.sys(l); });
+      reply(P('ach.list', 'Voilà ton tableau de chasse.'));
+      return true;
+    }
+    if (/^oublie (tout|moi|ce que tu sais( sur moi)?)$/.test(n)) {
+      ask(P('mem.forget?', "J'efface tout ce que je sais sur toi ? (oui / non)"), function () {
+        data.userName = data.favGame = data.project = data.birthday = ''; data.likes = []; data.dislikes = []; C.save();
+        reply(P('mem.forgot', 'Effacé. On repart de zéro.'));
+      });
+      return true;
+    }
+    var learned = tryLearn(n, raw);
+    if (learned) { reply(learned); return true; }
+
+    // radio
+    var stn = C.radio.find(n);
+    if (/^((mets|met|lance|allume|joue|passe)( moi)? (de la |la |un peu de |du )?(musique|radio|son|zik|synthwave)( cyberpunk| synthwave| de night city)?|radio( night city)?)$/.test(n) || (stn >= 0 && /^(mets|met|lance|passe|joue)\b/.test(n))) {
+      if (!data.cfg.radio) { reply('La radio est coupée dans les paramètres.'); return true; }
+      C.radio.play(stn);
+      reply(C.line('radio.start', 'Radio Night City en ligne : {0}.', C.radio.current().name));
+      return true;
+    }
+    if (/^(change de station|station suivante|autre station|change de musique|autre musique|zappe|musique suivante|suivante|next)$/.test(n) && C.radio.playing) {
+      C.radio.next();
+      reply(C.line('radio.switch', 'On passe sur {0}.', C.radio.current().name));
+      return true;
+    }
+    if (/^((coupe|arrete|stop|eteins|stoppe)( la| le)? (radio|musique|zik|son)|stop radio|pause)$/.test(n)) { C.radio.stop(); reply(P('radio.stop', 'Radio coupée.')); return true; }
+    if (/(quelle musique|c est quoi (cette|la) (musique|chanson)|quel (morceau|titre)|c est quoi ce son)/.test(n)) {
+      reply(C.radio.playing && C.radio.track ? 'Sur ' + C.radio.current().name + ' : ' + C.radio.track + '.' : 'Aucune radio en cours. Dis « mets de la musique ».');
+      return true;
+    }
+
+    // fête
+    if (/^((stop|arrete|fin de|coupe)( la| le mode)? fete|fin de la fete)$/.test(n)) { C.party.stop(); reply(P('party.off', 'Fin de la fête.')); return true; }
+    if (/^(mode fete|fais la fete|c est la fete|party|on fait la fete|fete|teuf)$/.test(n)) {
+      if (!data.cfg.party) { reply('Le mode fête est désactivé dans les paramètres.'); return true; }
+      C.ui.closePanel();
+      C.party.start(0, true);
+      return true;
+    }
+
+    // météo
+    m = n.match(/^(la )?(meteo|quel temps)( (il )?(fait il|va t il faire|va faire|fait))?( (a|au|en|sur|de))? ?(.*)$/);
+    if (m) {
+      if (data.cfg.weather) C.weather.ask(m[8].trim());
+      else { google('météo ' + m[8]); reply('Voilà la météo.'); }
+      return true;
+    }
+    if (/^(fais pleuvoir|pluie de neons|pluie|fais neiger|neige de neons|orage)$/.test(n)) {
+      C.ui.closePanel();
+      C.rain(n.indexOf('neige') >= 0 ? 'snow' : n === 'orage' ? 'storm' : 'rain', 30);
+      C.unlock('rainneon');
+      reply(P('rain.demo', 'Pluie acide sur Night City.'));
+      return true;
+    }
+
+    // rivale, breach, garde, easter egg
+    if (/^(combat|bagarre|duel|fight|appelle (ta )?rivale|rivale|vex)$/.test(n)) {
+      if (!data.cfg.rival) { reply('Les visites de la rivale sont désactivées dans les paramètres.'); return true; }
+      reply(P('fight.call', "Vex ? Qu'elle vienne."));
+      C.ui.closePanel();
+      setTimeout(function () { C.vexStart(); }, 1200);
+      return true;
+    }
+    if (/^(breach|breach protocol|hack)$/.test(n)) { reply(P('breach', 'Breach Protocol lancé.')); C.ui.closePanel(); C.breach(); return true; }
+    if (/\b(je pars|je m en vais|j y vais|je reviens|je m absente|brb|afk|je sors|je vais (manger|dormir|me doucher|aux toilettes|faire une pause))\b/.test(n)) {
+      if (!data.cfg.guard) { reply("Ok, à tout à l'heure !"); return true; }
+      reply(P('leave', 'Je verrouille le périmètre. Personne ne passe.'));
+      setTimeout(function () { C.ui.closePanel(); C.guard.start(true); }, 1600);
+      return true;
+    }
+    if (/(wake up samurai|reveille toi samourai|debout samourai)/.test(n)) {
+      reply(C.LINES.samurai[0][0]);
+      C.ui.closePanel();
+      C.glitch('> WAKE UP, SAMURAI  //  NIGHT CITY', function () { s.dance(); });
+      C.unlock('samurai');
+      return true;
+    }
+
+    // recherche / sites / traduction
+    m = n.match(/^(cherche|recherche|search|google)( moi)? (.+) sur youtube$/) || n.match(/^youtube (.+)$/);
+    if (m) { var q = m[3] || m[1]; open('https://www.youtube.com/results?search_query=' + encodeURIComponent(q)); reply('Je cherche « ' + q + ' » sur YouTube.'); return true; }
+    m = n.match(/^(cherche|recherche|search|google)( moi)? (.+?)( sur (google|internet|le web|le net))?$/);
+    if (m) { google(m[3]); reply(C.line('search', 'Recherche lancée : « {0} ».', m[3])); return true; }
+    m = raw.trim().match(/tradui[st]?\s+(.+?)\s+en\s+(\S+)\s*\??$/i);
+    if (m) {
+      var lang = C.LANGS[C.norm(m[2])] || 'en';
+      open('https://translate.google.com/?sl=auto&tl=' + lang + '&op=translate&text=' + encodeURIComponent(m[1].replace(/^["«»' ]+|["«»' ]+$/g, '')));
+      reply('Je te traduis ça.');
+      return true;
+    }
+    m = n.match(/^(lance|lancer|ouvre|ouvrir|demarre|va sur|open)( moi)? (le |la |l |les |site |appli |application )?(.+)$/);
+    if (m) {
+      var target = m[4].replace(/ /g, ''), url = C.SITES[target];
+      var um = raw.match(/(https?:\/\/\S+|\b[\w-]+(\.[\w-]+)*\.(com|fr|net|org|io|tv|gg|ai|dev|app|be|ch|ca)(\/\S*)?)/i);
+      if (!url && um) url = /^http/i.test(um[0]) ? um[0] : 'https://' + um[0];
+      if (url) { open(url); reply(C.line('open', "Ok, j'ouvre {0}.", m[4])); }
+      else reply("Sur iPhone, je peux pas lancer d'applis. Mais je peux ouvrir des sites : « ouvre youtube », « ouvre twitch »...");
+      return true;
+    }
+
+    if (n.indexOf('quelle heure') >= 0 || n === 'heure' || n === 'l heure') {
+      var now = new Date();
+      reply(C.line('time', 'Il est {0}.', now.getHours() + 'h' + ('0' + now.getMinutes()).slice(-2)));
+      return true;
+    }
+    if (n.indexOf('quel jour') >= 0 || n.indexOf('quelle date') >= 0 || n === 'date' || n === 'la date') {
+      reply('On est le ' + new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + '.');
+      return true;
+    }
+
+    // Capri elle-même
+    if (/^(dors|dodo|endors toi|repose toi|va dormir|fais dodo|mode veille|veille)$/.test(n)) { s.setSleep(true); reply(P('sleep', 'Mode veille... réveille-moi si besoin.')); return true; }
+    if (/^(reveille toi|reveille|debout|reveil|bouge)$/.test(n)) { s.setSleep(false); reply(P('wake', 'Je suis là ! Systèmes en ligne.')); return true; }
+    if (/^danse/.test(n)) { s.dance(); reply(P('dance', 'Regarde ça !')); return true; }
+    if (/^(fais un )?(eclair|flash|zap|sprint|cours)$/.test(n)) { s.dashRandom(); reply(P('dash', 'Zap !')); return true; }
+    if (/^(viens|viens ici|viens la|approche|ici|au pied|reviens)$/.test(n)) { s.come(); reply(P('come', "J'arrive !")); return true; }
+    if (/^(salut|bonjour|coucou|hello|yo|hey|bonsoir|wesh|slt)$/.test(n)) {
+      s.wave();
+      var hl = P('hello', 'Salut, choom !', 'Yo ! Besoin de quelque chose ?');
+      reply(data.userName && data.cfg.memory && Math.random() < 0.5 ? hl.replace(/[.!]?$/, ', ' + data.userName + '.') : hl);
+      return true;
+    }
+    if (/(blague|fais moi rire|un truc drole)/.test(n)) { reply(C.line('joke', pick(C.JOKES))); return true; }
+
+    for (var i = 0; i < C.SMALLTALK.length; i++) {
+      var st = C.SMALLTALK[i];
+      if (!st[0].test(n)) continue;
+      var key = st[1], normal = st.slice(2);
+      if (key === 'insult') C.bond(-8);
+      else if (key === 'praise' || key === 'love') C.bond(2);
+      if (!normal.length && !C.hasLine(key)) continue;
+      reply(normal.length ? C.line(key, pick(normal)) : C.line(key, ''));
+      if (key === 'praise' && (C.tier() > 0 || !data.cfg.personality)) s.dance();
+      return true;
+    }
+    return false;
+  }
+})();
