@@ -1,4 +1,6 @@
-// Dessin vectoriel de Capri (port de Figure.cs / Anim.cs) : repère 120 x 200, pieds au sol à y = 166, regard vers la droite
+// Dessin vectoriel de Capri (port de Figure.cs / Anim.cs) : repère 120 x 200, pieds au sol à y = 166, regard vers la droite.
+// Style Capricorne : corps en éclats géométriques rose / rouge / vert / noir à contour violet,
+// énorme crinière d'éclats rouges pailletés, deux mèches sur le visage, yeux en cibles.
 var C = window.C || (window.C = {});
 
 (function () {
@@ -6,11 +8,11 @@ var C = window.C || (window.C = {});
   C.FIG = { W: W, H: H, GROUND: GROUND, FPS: FPS, PS: 400 };
 
   var COL = C.COL = {
-    Black: '#0B0A10', Red: '#FF1E46', RedBack: '#B0122F', Green: '#3CF06E', GreenBack: '#1F9E48', GreenMid: '#2FD25E',
+    Black: '#0B0A10', Red: '#FF1E46', RedBack: '#B0122F', Pink: '#FF4F8B', Green: '#3CF06E', GreenBack: '#1F9E48', GreenMid: '#2FD25E',
     Shadow: '#5A0A3C', Purple: '#7B2CF0', Blue: '#1E6BFF', White: '#FFFFFF', Mouthin: '#5A0A1C', Volt: '#B46BFF'
   };
   // Palette de Vex, la rivale
-  C.VEX = { Red: '#1EC8FF', RedBack: '#0E6E9A', Green: '#FF2BD6', GreenBack: '#A01488', GreenMid: '#D020B0', Purple: '#FCEE0A', Shadow: '#0A2F5A' };
+  C.VEX = { Red: '#1EC8FF', RedBack: '#0E6E9A', Pink: '#8CF4FF', Green: '#FF2BD6', GreenBack: '#A01488', GreenMid: '#D020B0', Purple: '#FCEE0A', Shadow: '#0A2F5A' };
 
   // ---------- petits outils vectoriels ----------
   function P(x, y) { return { x: x, y: y }; }
@@ -20,11 +22,12 @@ var C = window.C || (window.C = {});
   function len(a) { return Math.sqrt(a.x * a.x + a.y * a.y); }
   function norm(a) { var l = len(a); return l < 1e-9 ? P(0, 0) : P(a.x / l, a.y / l); }
   function pts(v) { var r = []; for (var i = 0; i < v.length; i += 2) r.push(P(v[i], v[i + 1])); return r; }
+  function dir(a, b) { var d = sub(b, a); return len(d) < 0.01 ? P(0, 1) : norm(d); }
   // pseudo-aléatoire stable
   function R(i) { var v = Math.sin(i * 12.9898 + 4.1) * 43758.5453; return v - Math.floor(v); }
   C.vec = { P: P, add: add, sub: sub, mul: mul, len: len, norm: norm };
 
-  // contexte de dessin : couleur résolue selon teinte (silhouette unie) ou palette
+  // couleur résolue selon teinte (silhouette unie) ou palette (Vex)
   function col(d, name) { return d.tint || (d.pal && d.pal[name]) || COL[name]; }
 
   function poly(d, fill, p, alpha) {
@@ -39,18 +42,10 @@ var C = window.C || (window.C = {});
     if (alpha != null) c.globalAlpha = d.alpha;
   }
 
-  // contour fermé lissé (Catmull-Rom -> Bézier)
-  function smooth(d, fill, p) {
-    var c = d.ctx, n = p.length;
-    c.beginPath();
-    c.moveTo(p[0].x, p[0].y);
-    for (var i = 0; i < n; i++) {
-      var p0 = p[(i - 1 + n) % n], p1 = p[i], p2 = p[(i + 1) % n], p3 = p[(i + 2) % n];
-      c.bezierCurveTo(p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6, p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6, p2.x, p2.y);
-    }
-    c.closePath();
-    c.fillStyle = fill;
-    c.fill();
+  // éclat avec son contour violet décalé
+  function shard(d, fill, edge, p) {
+    if (edge) poly(d, edge, p.map(function (q) { return add(q, P(1.3, 1.3)); }));
+    poly(d, fill, p);
   }
 
   function disc(d, fill, x, y, r, stroke, th) {
@@ -72,84 +67,6 @@ var C = window.C || (window.C = {});
     c.stroke();
   }
 
-  // membre galbé a -> k -> b ; demi-largeurs côté dos (wb) et avant (wf)
-  function curvy(d, fill, a, k, b, wb, wf) {
-    var d1 = sub(k, a), d2 = sub(b, k);
-    if (len(d1) < 0.01) d1 = P(0, 1);
-    if (len(d2) < 0.01) d2 = d1;
-    d1 = norm(d1); d2 = norm(d2);
-    var n1 = P(-d1.y, d1.x), n2 = P(-d2.y, d2.x), nk = add(n1, n2);
-    if (len(nk) < 0.01) nk = n1;
-    nk = norm(nk);
-    var us = [0, 0.4, 0.8, 1, 1.35, 1.7, 2], mid = [], nor = [];
-    for (var i = 0; i < us.length; i++) {
-      var u = us[i];
-      if (u < 1) { mid[i] = add(a, mul(sub(k, a), u)); nor[i] = n1; }
-      else if (u > 1) { mid[i] = add(k, mul(sub(b, k), u - 1)); nor[i] = n2; }
-      else { mid[i] = k; nor[i] = nk; }
-    }
-    var p = [];
-    for (i = 0; i < us.length; i++) p.push(add(mid[i], mul(nor[i], wb[i])));
-    p.push(add(b, mul(d2, (wb[6] + wf[6]) * 0.6)));
-    for (i = us.length - 1; i >= 0; i--) p.push(sub(mid[i], mul(nor[i], wf[i])));
-    p.push(sub(a, mul(d1, (wb[0] + wf[0]) * 0.4)));
-    smooth(d, fill, p);
-  }
-
-  function leg(d, hip, kn, fo, fill) {
-    curvy(d, fill, hip, kn, fo, [6.0, 5.6, 3.6, 2.8, 3.9, 2.6, 1.4], [6.4, 5.2, 3.4, 2.8, 2.6, 2.0, 1.4]);
-  }
-
-  function claw(d, el, ha, fill) {
-    var dv = sub(ha, el);
-    if (len(dv) < 0.01) dv = P(0, 1);
-    dv = norm(dv);
-    var n = P(-dv.y, dv.x);
-    smooth(d, fill, [sub(sub(ha, mul(n, 1.6)), mul(dv, 0.5)), sub(add(ha, mul(dv, 3)), mul(n, 1.2)), add(add(ha, mul(dv, 3)), mul(n, 1.2)), sub(add(ha, mul(n, 1.6)), mul(dv, 0.5))]);
-    for (var i = -1; i <= 2; i++) {
-      var a = (i - 0.5) * 0.32;
-      var fd = add(mul(dv, Math.cos(a)), mul(n, Math.sin(a)));
-      var fn = P(-fd.y, fd.x);
-      var b = add(add(ha, mul(dv, 2.5)), mul(n, (i - 0.5) * 0.9));
-      poly(d, fill, [add(b, mul(fn, 0.5)), add(b, mul(fd, i === 2 ? 4.5 : 7)), sub(b, mul(fn, 0.5))]);
-    }
-  }
-
-  function arm(d, sh, el, ha, fill) {
-    curvy(d, fill, sh, el, ha, [3.0, 2.6, 1.8, 1.6, 2.0, 1.6, 1.0], [3.0, 2.4, 1.8, 1.6, 1.8, 1.4, 1.0]);
-    claw(d, el, ha, fill);
-  }
-
-  function shoe(d, f, fill, edge) {
-    if (edge) {
-      shoe(d, add(f, P(0.9, 0.9)), edge, null);
-      shoe(d, add(f, P(-0.6, -0.6)), edge, null);
-    }
-    smooth(d, fill, pts([f.x - 3.2, f.y - 8.5, f.x + 1.2, f.y - 7.5, f.x + 6, f.y - 3.2, f.x + 10.5, f.y - 0.8, f.x + 4, f.y - 0.2, f.x - 0.5, f.y - 2.6, f.x - 3.6, f.y - 4.2]));
-    poly(d, fill, pts([f.x + 8, f.y - 1.9, f.x + 13, f.y, f.x + 8, f.y - 0.1]));
-    poly(d, fill, pts([f.x - 4, f.y - 5, f.x - 3.4, f.y, f.x - 2.6, f.y - 0.2, f.x - 2.2, f.y - 4]));
-  }
-
-  function neckSeg(d, p0, p1, fill) {
-    var dv = sub(p1, p0);
-    if (len(dv) < 0.01) dv = P(0, -1);
-    dv = norm(dv);
-    var n = P(-dv.y, dv.x), m = add(p0, mul(sub(p1, p0), 0.5));
-    smooth(d, fill, [add(p0, mul(n, 2.6)), add(m, mul(n, 1.7)), add(p1, mul(n, 2)), sub(p1, mul(n, 2)), sub(m, mul(n, 1.7)), sub(p0, mul(n, 2.6))]);
-  }
-
-  function torso(d, p, red, green) {
-    var u = sub(p.Hip, p.Neck), L = len(u);
-    if (L < 1) return;
-    u = norm(u);
-    var n = P(-u.y, u.x);
-    function at(t, s) { return add(add(p.Neck, mul(u, L * t)), mul(n, s)); }
-    smooth(d, red, [at(-0.02, 2.4), at(0.07, 5.6), at(0.28, 4.6), at(0.56, 3.0), at(0.8, 7.2), at(0.97, 7.4), at(1.1, 0.5),
-      at(0.98, -8.0), at(0.82, -8.4), at(0.6, -3.4), at(0.45, -4.6), at(0.33, -8.6), at(0.2, -7.6), at(0.08, -5.4), at(-0.02, -2.4)]);
-    smooth(d, green, [at(-0.02, 2.4), at(0.07, 5.6), at(0.28, 4.6), at(0.56, 3.0), at(0.8, 7.2), at(0.97, 7.4), at(1.1, 0.5),
-      at(0.98, -0.6), at(0.72, -0.2), at(0.4, 0.8), at(0.12, 0.2), at(-0.02, -0.2)]);
-  }
-
   function atHead(d, p, fn) {
     var c = d.ctx;
     c.save();
@@ -159,88 +76,165 @@ var C = window.C || (window.C = {});
     c.restore();
   }
 
+  // lame anguleuse de a vers b, bords en dents de scie, pointe au bout
+  function blade(a, b, wa, wb, tip) {
+    var d = dir(a, b), n = P(-d.y, d.x), L = len(sub(b, a));
+    function at(t, s) { return add(add(a, mul(d, L * t)), mul(n, s)); }
+    return [add(a, mul(n, wa)), at(0.32, wa * 1.2), at(0.66, wb * 1.45), add(b, mul(n, wb * 0.7)), add(b, mul(d, tip)),
+      sub(b, mul(n, wb * 0.85)), at(0.56, -wb * 1.15), at(0.24, -wa * 1.05), sub(a, mul(n, wa * 0.9))];
+  }
+
+  // ---------- corps ----------
+  function leg(d, hip, kn, fo, main, dark, accent, edge) {
+    shard(d, main, edge, blade(hip, kn, 6.2, 3.6, 3));
+    shard(d, main, edge, blade(kn, fo, 3.6, 1.5, 2));
+    var d1 = dir(hip, kn), n1 = P(-d1.y, d1.x), d2 = dir(kn, fo), n2 = P(-d2.y, d2.x), l1 = len(sub(kn, hip)), l2 = len(sub(fo, kn));
+    function a1(t, s) { return add(add(hip, mul(d1, l1 * t)), mul(n1, s)); }
+    function a2(t, s) { return add(add(kn, mul(d2, l2 * t)), mul(n2, s)); }
+    poly(d, dark, [a1(0.18, 5.2), a1(0.7, 4.2), a1(0.42, 1.2)]);
+    poly(d, accent, [a1(0.35, -5.6), a1(0.62, -3.2), a1(0.86, -4.4), a1(0.6, -1.2)]);
+    poly(d, dark, [add(kn, mul(n2, 3.6)), add(add(kn, mul(d2, 6)), mul(n2, 1)), sub(kn, mul(n2, 2.4))]);
+    poly(d, dark, [a2(0.5, -2.4), a2(0.78, -1.2), a2(0.6, 0.6)]);
+  }
+
+  function foot(d, f, fill, edge) {
+    shard(d, fill, edge, pts([f.x - 3.5, f.y - 7, f.x + 1.5, f.y - 6, f.x + 13, f.y + 0.2, f.x + 2, f.y - 0.5, f.x - 3, f.y + 0.4]));
+    poly(d, COL.Black, pts([f.x - 3.8, f.y - 4.5, f.x - 2.2, f.y + 0.4, f.x - 1.2, f.y - 3.5]));
+  }
+
+  function claw(d, el, ha, fill) {
+    var dv = dir(el, ha), n = P(-dv.y, dv.x);
+    poly(d, fill, [sub(ha, mul(n, 1.8)), sub(add(ha, mul(dv, 3)), mul(n, 1.2)), add(add(ha, mul(dv, 3)), mul(n, 1.2)), add(ha, mul(n, 1.8))]);
+    for (var i = -1; i <= 2; i++) {
+      var a = (i - 0.5) * 0.34;
+      var fd = add(mul(dv, Math.cos(a)), mul(n, Math.sin(a))), fn = P(-fd.y, fd.x);
+      var b = add(add(ha, mul(dv, 2.5)), mul(n, (i - 0.5) * 0.9));
+      poly(d, fill, [add(b, mul(fn, 0.6)), add(b, mul(fd, i === 2 ? 4.5 : 7.5)), sub(b, mul(fn, 0.6))]);
+    }
+  }
+
+  function arm(d, sh, el, ha, main, dark, edge) {
+    shard(d, main, edge, blade(sh, el, 2.8, 1.9, 1.5));
+    shard(d, main, edge, blade(el, ha, 1.9, 1.1, 1.5));
+    var dv = dir(el, ha), n = P(-dv.y, dv.x), l = len(sub(ha, el));
+    poly(d, dark, [add(add(el, mul(dv, l * 0.25)), mul(n, 1.6)), add(add(el, mul(dv, l * 0.7)), mul(n, 0.4)), sub(add(el, mul(dv, l * 0.45)), mul(n, 0.8))]);
+    claw(d, el, ha, main);
+  }
+
+  function neck(d, p, green, dark) {
+    var a = add(p.Neck, mul(sub(p.Neck, p.Hip), -0.06)), b = add(p.Head, P(0, 8)), dv = dir(a, b), n = P(-dv.y, dv.x), ab = sub(b, a);
+    poly(d, green, [add(a, mul(n, 2.6)), add(add(a, mul(ab, 0.5)), mul(n, 1.4)), add(b, mul(n, 2.2)), sub(b, mul(n, 2.2)), sub(add(a, mul(ab, 0.45)), mul(n, 1.8)), sub(a, mul(n, 2.8))]);
+    poly(d, dark, [sub(add(a, mul(ab, 0.2)), mul(n, 1.6)), add(add(a, mul(ab, 0.6)), mul(n, 0.4)), sub(add(a, mul(ab, 0.75)), mul(n, 1.4))]);
+  }
+
+  function torso(d, p, edge) {
+    var u = sub(p.Hip, p.Neck), L = len(u);
+    if (L < 1) return;
+    u = norm(u);
+    var n = P(-u.y, u.x);
+    function at(t, s) { return add(add(p.Neck, mul(u, L * t)), mul(n, s)); }
+    shard(d, col(d, 'Red'), edge, [at(-0.02, 3), at(0.1, 6.4), at(0.3, 4.4), at(0.5, 2.6), at(0.72, 6.6), at(0.96, 8.2), at(1.1, 1),
+      at(0.98, -8.6), at(0.8, -7.6), at(0.6, -3.1), at(0.42, -5.2), at(0.29, -9), at(0.15, -7.2), at(0.02, -3)]);
+    poly(d, col(d, 'Green'), [at(-0.02, 3), at(0.1, 6.4), at(0.3, 4.4), at(0.46, 2.6), at(0.34, 0.4), at(0.12, 1.2)]);
+    poly(d, col(d, 'Green'), [at(0.19, -7.6), at(0.31, -3.6), at(0.37, -8.6)]);
+    poly(d, d.tint || COL.Black, [at(0.5, 2.6), at(0.6, -3.1), at(0.7, -0.6), at(0.6, 4)]);
+    poly(d, d.tint || COL.Black, [at(0.8, 6.6), at(0.98, 8.2), at(1.08, 0.4), at(0.9, 2.4)]);
+    poly(d, col(d, 'Pink'), [at(0.74, -6.8), at(0.92, -8.4), at(0.84, -3.2)]);
+    poly(d, d.tint || COL.Black, [at(0.22, -2.5), at(0.36, -1.2), at(0.27, 1.5)]);
+  }
+
+  // ---------- crinière ----------
   function hair(d, p) {
     var flow = norm(p.ScarfDir), a0 = -p.Tilt * Math.PI / 180;
     flow = P(flow.x * Math.cos(a0) - flow.y * Math.sin(a0), flow.x * Math.sin(a0) + flow.y * Math.cos(a0));
-    var stretch = 3 + (p.ScarfStretch - 1) * 20, o = P(-4, -10);
-    var n = 11, span = 250, step = span / n * Math.PI / 180;
-    function polar(a, r, fl) { return add(add(o, P(Math.cos(a) * r, Math.sin(a) * r)), mul(flow, stretch * fl)); }
+    var stretch = 3 + (p.ScarfStretch - 1) * 20, o = P(-2, -20);
+    function polar(deg, r, fl) { var a = deg * Math.PI / 180; return add(add(o, P(Math.cos(a) * r, Math.sin(a) * r)), mul(flow, stretch * fl)); }
     atHead(d, p, function () {
-      var q = [];
-      for (var i = 0; i <= n; i++) {
-        var f = i / n;
-        var a = (-235 + f * span) * Math.PI / 180 + Math.sin(p.ScarfPhase * 0.6 + i * 1.7) * 0.03;
-        var r = 44 + R(i) * 15 - Math.abs(f - 0.3) * 10;
-        var fl = 0.5 + R(i + 40);
-        q.push(polar(a, r, fl));
-        if (i < n) {
-          q.push(polar(a + step * 0.22, r * (0.72 + R(i + 60) * 0.12), fl * 0.8));
-          q.push(polar(a + step * 0.38, r * (0.82 + R(i + 80) * 0.1), fl * 0.8));
-          q.push(polar(a + step * 0.62, 29 + R(i + 20) * 8, 0.4));
-        }
+      var shards = [], core = [], i;
+      for (i = 0; i < 16; i++) {
+        var dg = i * 360 / 16, upc = Math.max(0, -Math.sin(dg * Math.PI / 180));
+        core.push(polar(dg, 26 + upc * 14 + R(i + 900) * 8, 0.15));
       }
-      q.push(P(12, 6));
-      q.push(P(-6, 14));
-      poly(d, col(d, 'Purple'), q.map(function (v) { return add(v, P(1.8, 2.2)); }));
-      poly(d, col(d, 'Red'), q);
-      var sh = [-175, -60, -10];
-      for (var s = 0; s < sh.length; s++) {
-        var aa = sh[s] * Math.PI / 180, dv = P(Math.cos(aa), Math.sin(aa)), nv = P(-dv.y, dv.x);
-        var m = add(add(add(o, mul(dv, 60 + R(s + 70) * 4)), mul(flow, stretch * 1.3)), mul(nv, Math.sin(p.ScarfPhase * 0.8 + s) * 1.2));
-        var o15 = P(1.5, 1.5);
-        poly(d, col(d, 'Purple'), [add(add(m, mul(nv, 2.6)), o15), add(add(m, mul(dv, 6)), o15), add(sub(m, mul(nv, 1.6)), o15)]);
-        poly(d, col(d, 'Red'), [add(m, mul(nv, 2.6)), add(m, mul(dv, 6)), sub(m, mul(nv, 1.6))]);
+      shards.push(core);
+      var n = 12;
+      for (i = 0; i < n; i++) {
+        var deg = -206 + i * (232 / (n - 1)) + (R(i) - 0.5) * 10 + Math.sin(p.ScarfPhase * 0.6 + i * 1.7) * 1.5;
+        var up = Math.max(0, -Math.sin(deg * Math.PI / 180)), L = 36 + R(i + 10) * 16 + up * 26, w = 13 + R(i + 20) * 7, fl = 0.4 + R(i + 40);
+        shards.push([polar(deg - w, 20, 0.1), polar(deg - w * 0.9, L * 0.7, fl * 0.6), polar(deg - w * 0.45, L * 0.82, fl * 0.7), polar(deg - w * 0.2, L, fl),
+          polar(deg + w * 0.25, L * 0.78, fl * 0.75), polar(deg + w * 0.55, L * 0.9, fl * 0.8), polar(deg + w * 0.8, L * 0.6, fl * 0.55), polar(deg + w, 20, 0.1)]);
       }
+      [[160, 46, 8], [145, 40, 7], [172, 34, 6], [30, 42, 7], [45, 34, 6]].forEach(function (f, k) {
+        var dg2 = f[0] + Math.sin(p.ScarfPhase * 0.7 + k) * 2;
+        shards.push([polar(dg2 - f[2], 18, 0.1), polar(dg2 - f[2] * 0.3, f[1] * 0.7, 0.5), polar(dg2, f[1], 0.9), polar(dg2 + f[2] * 0.4, f[1] * 0.6, 0.45), polar(dg2 + f[2], 18, 0.1)]);
+      });
+      var red = col(d, 'Red'), shade = col(d, 'Purple');
+      shards.forEach(function (s) { poly(d, shade, s.map(function (q) { return add(q, P(2, 2.4)); })); });
+      shards.forEach(function (s) { poly(d, red, s); });
+      [-150, -96, -40, 8, 120].forEach(function (lg, s) {
+        var dg3 = lg + Math.sin(p.ScarfPhase * 0.8 + s) * 3, m = polar(dg3, 66 + R(s + 70) * 10, 1.3);
+        var dv = P(Math.cos(dg3 * Math.PI / 180), Math.sin(dg3 * Math.PI / 180)), nv = P(-dv.y, dv.x), o15 = P(1.5, 1.5);
+        poly(d, shade, [add(add(m, mul(nv, 2.6)), o15), add(add(m, mul(dv, 9)), o15), add(sub(m, mul(nv, 1.8)), o15)]);
+        poly(d, red, [add(m, mul(nv, 2.6)), add(m, mul(dv, 9)), sub(m, mul(nv, 1.8))]);
+      });
       if (!d.tint) {
+        for (var s = 0; s < 6; s++) {
+          var dg4 = -190 + s * 38 + R(s + 500) * 14, r0 = 16 + R(s + 510) * 10, r1 = r0 + 12 + R(s + 520) * 10;
+          poly(d, COL.Black, [polar(dg4, r0, 0.3), polar(dg4 + 4, r1, 0.5), polar(dg4 - 3, (r0 + r1) / 2, 0.4)], 0.75);
+        }
         var flick = Math.floor(p.ScarfPhase * 2);
-        for (s = 0; s < 55; s++) {
-          if ((s + flick) % 6 === 0) continue;
-          var a2 = (-215 + R(s + 100) * 205) * Math.PI / 180, r2 = 14 + R(s + 200) * 34;
-          var mm = add(add(o, P(Math.cos(a2) * r2, Math.sin(a2) * r2)), mul(flow, stretch * 0.5));
-          var z = 0.4 + R(s + 300) * 0.8;
-          poly(d, COL.White, [P(mm.x, mm.y - z), P(mm.x + z, mm.y), P(mm.x, mm.y + z), P(mm.x - z, mm.y)], 0.55 + R(s + 400) * 0.45);
+        for (s = 0; s < 170; s++) {
+          if ((s + flick) % 7 === 0) continue;
+          var dg5 = -210 + R(s + 100) * 240, r = 6 + R(s + 200) * (40 + Math.max(0, -Math.sin(dg5 * Math.PI / 180)) * 24);
+          var mm = polar(dg5, r, 0.5), z = 0.4 + R(s + 300) * 0.8;
+          poly(d, COL.White, [P(mm.x, mm.y - z), P(mm.x + z, mm.y), P(mm.x, mm.y + z), P(mm.x - z, mm.y)], 0.5 + R(s + 400) * 0.5);
         }
       }
     });
   }
 
+  // ---------- tête ----------
   function eyes(d, face) {
-    var ex = [-5.5, 7.5], ey = [-5, -6], B = COL.Black, G = col(d, 'Green');
+    var ex = [-7.5, 9], ey = [-4.5, -5.5], B = COL.Black, G = col(d, 'Green');
     for (var i = 0; i < 2; i++) {
       var x = ex[i], y = ey[i];
-      if (face === 1) line(d, B, 1.7, [x - 4, y + 1.5, x, y - 2.5, x + 4, y + 1.5]);
-      else if (face === 2) line(d, B, 1.7, [x - 4, y + 0.5, x + 4, y + 0.5]);
+      if (face === 1) { line(d, B, 1.8, [x - 4.5, y + 1.5, x, y - 2.8, x + 4.5, y + 1.5]); line(d, G, 0.8, [x - 3.6, y + 2.6, x, y - 0.6, x + 3.6, y + 2.6]); }
+      else if (face === 2) line(d, B, 1.8, [x - 4.5, y + 0.5, x + 4.5, y + 0.5]);
       else if (face === 4) {
-        disc(d, B, x, y, 5);
+        disc(d, B, x, y, 5.6);
         var sp = [];
-        for (var k = 0; k <= 22; k++) { var a = k * 0.6 + i * 3, r = 0.2 + k * 0.18; sp.push(x + Math.cos(a) * r, y + Math.sin(a) * r); }
+        for (var k = 0; k <= 24; k++) { var a = k * 0.6 + i * 3, r = 0.2 + k * 0.19; sp.push(x + Math.cos(a) * r, y + Math.sin(a) * r); }
         line(d, G, 0.9, sp);
-      } else if (face === 3) {
-        disc(d, B, x, y, 6); disc(d, null, x, y, 4.8, G, 0.8); disc(d, COL.Blue, x, y, 2); disc(d, COL.White, x, y, 0.8);
       } else {
-        disc(d, B, x, y, 5); disc(d, null, x, y, 3.9, G, 0.8); disc(d, COL.Blue, x, y, 2.8); disc(d, COL.White, x + 0.5, y - 0.4, 1.1);
+        var big = face === 3 ? 1.15 : 1;
+        disc(d, B, x, y, 5.8 * big); disc(d, null, x, y, 4.9 * big, G, 1.3); disc(d, B, x, y, 3.5 * big);
+        disc(d, COL.Blue, x, y, 2.7 * big); disc(d, null, x, y, 2.7 * big, B, 0.5); disc(d, COL.White, x + 0.2, y - 0.2, face === 3 ? 0.8 : 1.15);
       }
     }
-    if (face === 0 || face === 3) poly(d, B, pts([8, -0.5, 10.5, 2.2, 6.5, 1.8]));
   }
 
   function mouth(d, open) {
     var m = open * 3.2;
     if (m > 0.4) poly(d, COL.Mouthin, pts([-6, 6, 10, 5, 9, 7 + m, -5, 8 + m]));
-    line(d, COL.White, 0.7, [-6, 6, -3, 4.2, 0, 7, 3, 4.2, 6, 6.8, 9.5, 4.6]);
+    line(d, COL.White, 0.7, [-6.5, 6, -4, 4, -1.5, 7, 1, 4, 3.5, 7, 6, 4.2, 8.5, 6.6, 10.5, 4.6]);
     if (m > 0.4) line(d, COL.White, 0.7, [-5, 8 + m, -2, 6 + m, 1, 8.6 + m, 4, 6 + m, 7, 8.2 + m, 9, 6.6 + m]);
   }
 
   function headPart(d, p) {
     atHead(d, p, function () {
-      var black = d.tint || COL.Black, green = col(d, 'Green');
-      poly(d, black, pts([-6, -11, -15, -38, 2, -13]));
-      poly(d, black, pts([5, -12, 21, -29, 12, -8]));
-      poly(d, black, pts([-12, -5, -30, -11, -11, 2]));
-      poly(d, black, pts([12, -3, 32, -7, 11, 4]));
-      poly(d, green, pts([-13, -11, 13, -14, 16, -3, 12, 1, -11, 2, -15, -4]));
-      poly(d, black, pts([-11, 2, 12, 1, 15, 4, 7, 13, -3, 16, -10, 9]));
-      poly(d, black, pts([0.6, -14, 2.4, -14, 1.6, 1.5]));
+      var black = d.tint || COL.Black, green = col(d, 'Green'), red = col(d, 'Red');
+      poly(d, black, pts([-6, -11, -15, -36, 1, -13]));
+      poly(d, black, pts([5, -12, 21, -30, 12, -8]));
+      poly(d, black, pts([-12, -5, -31, -12, -11, 2]));
+      poly(d, black, pts([12, -3, 33, -8, 11, 4]));
+      poly(d, black, pts([-15, 0, -26, 10, -11, 5]));
+      poly(d, black, pts([-16, -12, 15, -15, 18, -3, 14, 3, -13, 4, -18, -4]));
+      poly(d, green, pts([-15, -10, -1.5, -12.5, -0.5, 0.5, -12, 2, -17, -4]));
+      poly(d, green, pts([2.5, -13.5, 14.5, -14, 17.5, -4, 13.5, 1, 3, 0.5]));
+      poly(d, black, pts([-12, 2, 13, 0.5, 16, 4, 8, 13, -3, 16, -11, 9]));
+      // les deux mèches qui tombent sur le visage
+      if (!d.tint) poly(d, col(d, 'Purple'), pts([1.2, -25, 7.6, -23, 2.2, -9, -1.4, 4]));
+      poly(d, red, pts([0, -26, 6.4, -24, 1, -10, -2.6, 3.2]));
+      poly(d, black, pts([5.5, -24, 11, -21, 5.2, -11, 2.8, -1]));
       if (!d.tint) { eyes(d, p.Face); mouth(d, p.Mouth); }
     });
   }
@@ -248,19 +242,19 @@ var C = window.C || (window.C = {});
   // Dessine Capri dans ctx (repère figure). tint : silhouette unie ; pal : palette de remplacement (Vex)
   C.drawFigure = function (ctx, p, tint, pal, alpha) {
     var d = { ctx: ctx, tint: tint || null, pal: pal || null, alpha: alpha == null ? 1 : alpha };
+    var edge = d.tint ? null : col(d, 'Purple');
     ctx.save();
     ctx.globalAlpha = d.alpha;
     hair(d, p);
-    arm(d, p.ShB, p.ElB, p.HaB, col(d, 'GreenBack'));
-    leg(d, add(p.Hip, P(-3, 0)), p.KnB, p.FoB, col(d, 'GreenMid'));
-    var edge = d.tint ? null : col(d, 'Purple');
-    shoe(d, p.FoB, d.tint || COL.Black, edge);
-    torso(d, p, col(d, 'Red'), col(d, 'Green'));
-    neckSeg(d, add(p.Neck, mul(sub(p.Neck, p.Hip), -0.06)), add(p.Head, P(0, 8)), col(d, 'Green'));
-    leg(d, add(p.Hip, P(3, 0)), p.KnF, p.FoF, col(d, 'Red'));
-    shoe(d, p.FoF, d.tint || COL.Black, edge);
+    arm(d, p.ShB, p.ElB, p.HaB, col(d, 'GreenBack'), d.tint || COL.Black, edge);
+    leg(d, add(p.Hip, P(-3, 0)), p.KnB, p.FoB, col(d, 'GreenMid'), d.tint || COL.Black, col(d, 'GreenBack'), edge);
+    foot(d, p.FoB, d.tint || COL.Black, edge);
+    torso(d, p, edge);
+    neck(d, p, col(d, 'Green'), d.tint || COL.Black);
+    leg(d, add(p.Hip, P(3, 0)), p.KnF, p.FoF, col(d, 'Red'), d.tint || COL.Black, col(d, 'Pink'), edge);
+    foot(d, p.FoF, col(d, 'Red'), edge);
     headPart(d, p);
-    arm(d, p.ShF, p.ElF, p.HaF, col(d, 'Green'));
+    arm(d, p.ShF, p.ElF, p.HaF, col(d, 'Green'), d.tint || COL.Black, edge);
     ctx.restore();
   };
 
@@ -271,7 +265,8 @@ var C = window.C || (window.C = {});
       line(d, COL.Black, 7, [x - 17, y + 12, x + 19, y - 10]);
       return;
     }
-    disc(d, COL.Black, x, y, 26); disc(d, null, x, y, 19, COL.Green, 3.5); disc(d, COL.Blue, x, y, 12); disc(d, COL.White, x + 3, y - 3, 4.5);
+    disc(d, COL.Black, x, y, 27); disc(d, null, x, y, 22, COL.Green, 5); disc(d, COL.Black, x, y, 16);
+    disc(d, COL.Blue, x, y, 12.5); disc(d, null, x, y, 12.5, COL.Black, 2); disc(d, COL.White, x + 1, y - 1, 5.5);
   }
 
   C.drawPortrait = function (ctx, wink, tint) {
@@ -301,18 +296,21 @@ var C = window.C || (window.C = {});
     poly(d, k('Green'), pts([118, 302, 175, 296, 150, 400, 92, 400]));
     poly(d, k('Red'), pts([200, 300, 222, 298, 214, 345, 228, 400, 196, 400, 206, 340]));
     poly(d, k('Black'), pts([175, 260, 230, 255, 240, 302, 165, 306]));
-    var horns = [[150, 162, 182, 145, 70, 70], [190, 142, 216, 143, 250, 15], [232, 148, 248, 151, 292, 62], [242, 152, 262, 168, 348, 98], [264, 188, 268, 212, 372, 214], [132, 198, 140, 222, 38, 190]];
-    horns.forEach(function (h) {
+    [[150, 162, 182, 145, 70, 70], [190, 142, 216, 143, 250, 15], [232, 148, 248, 151, 292, 62], [242, 152, 262, 168, 348, 98], [264, 188, 268, 212, 372, 214], [132, 198, 140, 222, 38, 190]].forEach(function (h) {
       poly(d, k('Purple'), pts([h[0] + 5, h[1] + 5, h[2] + 5, h[3] + 5, h[4] + 5, h[5] + 5]));
       poly(d, k('Black'), pts(h));
     });
     poly(d, k('Green'), pts([135, 165, 205, 148, 262, 152, 280, 190, 262, 212, 200, 222, 140, 228, 122, 198]));
     poly(d, k('Black'), pts([211, 146, 220, 147, 192, 226, 184, 224]));
     poly(d, k('Black'), pts([132, 222, 205, 215, 270, 205, 262, 240, 225, 272, 175, 282, 145, 258]));
+    // les deux mèches sur le visage
+    poly(d, k('Purple'), pts([186, 104, 212, 108, 206, 170, 196, 228]));
+    poly(d, k('Red'), pts([180, 100, 206, 104, 200, 168, 190, 224]));
+    poly(d, k('Black'), pts([214, 96, 240, 112, 214, 160, 206, 214]));
     if (!tint) {
-      bigEye(d, 166, 190, false);
-      bigEye(d, 240, 184, wink);
-      poly(d, COL.Black, pts([244, 206, 262, 214, 238, 214]));
+      bigEye(d, 162, 190, false);
+      bigEye(d, 244, 184, wink);
+      poly(d, COL.Black, pts([248, 208, 266, 216, 242, 216]));
       var up = wink ? 6 : 0;
       line(d, COL.White, 1.8, [165, 247, 175, 241, 185, 249, 195, 241, 205, 248, 215, 240 - up * 0.4, 225, 246 - up * 0.7, 238, 236 - up]);
     }

@@ -302,7 +302,7 @@ var C = window.C || (window.C = {});
     hit.style.left = (st.x - fw / 2) + 'px'; hit.style.top = (st.y - fh) + 'px';
     hit.style.width = fw + 'px'; hit.style.height = fh + 'px';
     hit.style.display = stage.hidden ? 'none' : 'block';
-    if (!bubble.classList.contains('hidden')) placeBubble(bubble, st.x, st.y - 168 * S);
+    if (!bubble.classList.contains('hidden')) placeBubble(bubble, st.x, st.y - 222 * S);
   }
 
   function placeBubble(b, x, top) {
@@ -362,7 +362,7 @@ var C = window.C || (window.C = {});
     bubble.classList.remove('hidden');
     st.bubbleT = Math.max(3, Math.min(9, 2.5 + t.length * 0.055));
     stage.talkFor(Math.min(6, 0.8 + t.length * 0.05));
-    placeBubble(bubble, st.x, st.y - 168 * S);
+    placeBubble(bubble, st.x, st.y - 222 * S);
   };
   stage.hideBubble = function () { bubble.classList.add('hidden'); st.bubbleT = 0; };
   stage.talkFor = function (s) { st.talkT = Math.max(st.talkT, s); };

@@ -587,7 +587,7 @@ var C = window.C || (window.C = {});
           s.drawFig(p, v.x + 5, y, v.dir, '#FF2BD6', null, 0.6 * alpha);
         }
         s.drawFig(p, v.x, y, v.dir, null, C.VEX, alpha);
-        if (!vb.classList.contains('hidden')) s.placeBubble(vb, v.x, y - 168 * S);
+        if (!vb.classList.contains('hidden')) s.placeBubble(vb, v.x, y - 222 * S);
       }
     };
     function done() {
