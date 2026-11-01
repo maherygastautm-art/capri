@@ -123,11 +123,13 @@ button.chip.on { color: var(--cyan); border-color: var(--cyan); }
 /* ---------- mini-jeu ---------- */
 #game { position: absolute; inset: 0; overflow-y: auto; background: #0A0B11; }
 #game:not(.hidden) ~ #log, .logArea.playing #log { visibility: hidden; }
-.g-head { display: flex; justify-content: space-between; align-items: flex-start; }
-.g-title { color: var(--red); font-size: 15px; font-weight: 700; }
-.g-help { font-family: var(--mono); font-size: 10px; color: var(--red-dim); margin: 2px 0 6px; }
-.g-time { text-align: right; font-size: 10px; color: var(--red-dim); }
-.g-time b { display: block; font-size: 22px; color: var(--light); font-weight: 600; }
+/* l'en-tête ne doit jamais changer de hauteur : sinon la grille saute à chaque tic du chrono */
+.g-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.g-head > div:first-child { flex: 1; min-width: 0; }
+.g-title { color: var(--red); font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-help { font-family: var(--mono); font-size: 10px; color: var(--red-dim); margin: 2px 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-time { flex: none; width: 64px; text-align: right; font-size: 10px; color: var(--red-dim); }
+.g-time b { display: block; font-size: 22px; color: var(--light); font-weight: 600; font-variant-numeric: tabular-nums; }
 .g-body { display: flex; gap: 10px; }
 .g-grid { position: relative; display: grid; grid-template-columns: repeat(5, 38px); grid-auto-rows: 32px; border: 1px solid var(--red-dim); padding: 5px; flex: none; align-self: flex-start; }
 .g-cell { display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 600; color: #9A8A88; border: 1px solid transparent; position: relative; z-index: 1; }
@@ -142,7 +144,7 @@ button.chip.on { color: var(--cyan); border-color: var(--cyan); }
 .g-seq span.ok { background: var(--on); border-color: var(--cyan); color: var(--cyan); }
 .g-seq span.next { border-color: var(--red); }
 .g-buf span { width: 30px; height: 24px; border: 1px dashed var(--red-dim); display: flex; align-items: center; justify-content: center; color: var(--cyan); font-size: 14px; }
-.g-status { font-family: var(--mono); font-size: 12px; color: var(--red-text); }
+.g-status { font-family: var(--mono); font-size: 12px; color: var(--red-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-quit { font-family: var(--mono); font-size: 11px; color: var(--red-dim); margin-top: 8px; text-decoration: underline; }
 .g-banner { position: absolute; left: 0; right: 0; top: 40%; padding: 14px 0; text-align: center; font-size: 28px; font-weight: 700; z-index: 3; }
 
@@ -378,3 +380,13 @@ button.chip.on { color: var(--cyan); border-color: var(--cyan); }
 :root { --kb: 0px; }
 .kb-open { --safe-b: 0px; }
 .kb-open #panel { height: max(200px, calc(var(--vh) - var(--bar-h) - var(--safe-t) - 70px)); min-height: 0; }
+
+/* liste d'amis dépliée dans les paramètres */
+.flist { margin: 0 0 6px; border-left: 2px solid var(--cyan); padding-left: 8px; }
+.fl-item { padding: 6px 4px; border-bottom: 1px solid rgba(138, 54, 51, .35); }
+.fl-n { color: var(--light); font-size: 15px; font-weight: 700; }
+.fl-item.req .fl-n { color: var(--yellow); }
+.fl-i { font-family: var(--mono); font-size: 11px; color: var(--red-dim); }
+.fl-a { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.fl-a .btn { font-size: 12px; padding: 2px 10px; }
+.fl-empty { color: var(--red-text); font-size: 13px; padding: 6px 4px; }
