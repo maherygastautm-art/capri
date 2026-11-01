@@ -234,7 +234,7 @@ var C = window.C || (window.C = {});
       rc.addEventListener('input', function () { data.cred = STEPS[+rc.value - 1]; showCred(); });
       rc.addEventListener('change', function () { C.save(); C.buddies.broadcast(true); ok('Street Cred réglée au niveau ' + C.cred.level() + '.'); });
       ri.addEventListener('input', function () { data.ice = +ri.value; showIce(); });
-      ri.addEventListener('change', function () { C.save(); C.buddies.broadcast(true); ok('ICE réglé au niveau ' + data.ice + ' (amis prévenus).'); });
+      ri.addEventListener('change', function () { C.buddies.touchIce(); C.buddies.broadcast(true); ok('ICE réglé au niveau ' + data.ice + ' (amis prévenus).'); });
       buttons('.b1', [['+100 XP', function () { C.cred.add(100); showCred(); ok('+100 XP.'); }], ['REMETTRE À ZÉRO', function () { data.cred = 0; data.skin = 'classique'; C.save(); showCred(); ok('Street Cred remise à zéro.'); }]]);
       buttons('.b2', C.cred.SKINS.map(function (k) {
         return [k.name + (k.level > 1 ? ' (niv. ' + k.level + ')' : ''), function () {

@@ -12,7 +12,7 @@ var C = window.C || (window.C = {});
     city: '', lat: 0, lon: 0, station: 0, lastSeen: 0,
     lastName: '', age: '', country: '', profileDone: false, passHash: '', passSalt: '', askPassword: true, contacts: {},
     cred: 0, skin: 'classique', lastDaily: '', notes: [], voiceName: '', voiceFx: 'normale', syncOn: false, syncCode: '', syncStamp: 0, syncHash: '', friendCode: '', lastVisit: 0,
-    buddies: [], requests: [], asked: [], ice: 1, onMap: false, hackable: true, lastBroadcast: 0, hacksWon: 0, hacksBlocked: 0
+    buddies: [], requests: [], asked: [], ice: 1, onMap: false, hackable: true, lastBroadcast: 0, hacksWon: 0, hacksBlocked: 0, iceStamp: 0
   };
   var data;
   try { data = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { data = null; }

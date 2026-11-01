@@ -375,7 +375,8 @@ var C = window.C || (window.C = {});
     },
     // boîte de réception du code ami : visites (V1) et messages d'amis (F1)
     poll: function () {
-      if (document.hidden) return;
+      if (document.hidden || friends.busy) return;   // jamais deux relevés en même temps (un piratage serait compté deux fois)
+      friends.busy = true;
       var since = data.lastVisit ? data.lastVisit + 1 : Math.floor(Date.now() / 1000) - 3600;
       friendTopic(friends.myCode()).then(function (t) { return fetch(RELAY + t + '/json?poll=1&since=' + since, { cache: 'no-store' }); }).then(function (r) { return r.text(); }).then(function (txt) {
         var last = data.lastVisit || 0, social = [];
@@ -393,7 +394,7 @@ var C = window.C || (window.C = {});
         if (last !== (data.lastVisit || 0)) { data.lastVisit = last; C.save(); }
         social.forEach(function (b) { if (C.buddies) C.buddies.handle(b); });
         showVisit();
-      }).catch(function () { });
+      }).catch(function () { }).then(function () { friends.busy = false; });
     }
   };
 
@@ -606,7 +607,11 @@ var C = window.C || (window.C = {});
       friends.poll();
     }, 60000);
     setTimeout(friends.poll, 5000);
-    setTimeout(function () { if (C.buddies) C.buddies.broadcast(false); }, 8000);
+    setTimeout(function () { if (C.buddies) { C.buddies.checkDecay(); C.buddies.broadcast(false); } }, 8000);
+    // boîte des amis relevée plus souvent, pour que les alertes d'attaque arrivent vite
+    setInterval(friends.poll, 15000);
+    setInterval(function () { if (C.buddies) C.buddies.checkDecay(); }, 60000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) { friends.poll(); if (C.buddies) C.buddies.checkDecay(); } });
     document.addEventListener('visibilitychange', function () { if (!document.hidden && data.syncOn) sync.pull(true); });
   };
 })();

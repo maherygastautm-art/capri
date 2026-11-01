@@ -4,7 +4,7 @@
 var C = window.C || (window.C = {});
 
 (function () {
-  var data = C.data, COOLDOWN = 10 * 60;
+  var data = C.data, COOLDOWN = 10 * 60, WEEK = 7 * 24 * 3600;
   ['buddies', 'requests', 'asked'].forEach(function (k) { if (!Array.isArray(data[k])) data[k] = []; });
   if (!data.ice) data.ice = 1;
   if (data.hackable === undefined) data.hackable = true;
@@ -19,7 +19,42 @@ var C = window.C || (window.C = {});
   function hasPlace(b) { return !!b.city && num(b.lat) !== null && num(b.lon) !== null; }
   function canHack(b) { return b.hack !== false && b.hack !== '0'; }
   function ice(b) { return Math.max(1, Math.min(10, parseInt(b.ice, 10) || 1)); }
-  function changed() { C.save(); if (C.worldMap.isOpen()) C.worldMap.refresh(); }
+  function changed() { C.save(); if (C.worldMap.isOpen()) C.worldMap.refresh(); renderRequests(); }
+
+  // ---------- alertes : bandeau rouge + Capri + notification du téléphone (si autorisée) ----------
+  C.alert = function (title, text) {
+    var b = el('div', 'alertbar', '<b></b><span></span>');
+    b.querySelector('b').textContent = title;
+    b.querySelector('span').textContent = text;
+    b.addEventListener('click', function () { b.remove(); });
+    var stack = document.getElementById('alerts');
+    if (!stack) { stack = el('div'); stack.id = 'alerts'; document.body.appendChild(stack); }
+    stack.appendChild(b);
+    setTimeout(function () { b.classList.add('out'); setTimeout(function () { b.remove(); }, 400); }, 9000);
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    C.say(text, title);
+    if (C.voice && data.cfg.voice) C.voice.speak(text);
+    if (window.Notification && Notification.permission === 'granted' && navigator.serviceWorker)
+      navigator.serviceWorker.ready.then(function (reg) { reg.showNotification('Capri — ' + title, { body: text, icon: 'icons/icon-192.png', tag: 'capri-' + title, renotify: true }); }).catch(function () { });
+  };
+
+  // ---------- demandes d'ami : cartes en haut à droite, jusqu'à accepter / refuser ----------
+  function renderRequests() {
+    var box = document.getElementById('freqs');
+    if (!box) { box = el('div'); box.id = 'freqs'; document.body.appendChild(box); }
+    box.innerHTML = '';
+    data.requests.forEach(function (r) {
+      var c = el('div', 'freq', '<div class="fq-h">DEMANDE D\'AMI // NETWATCH</div><div class="fq-n"></div><div class="fq-i"></div><div class="fq-a"></div>');
+      c.querySelector('.fq-n').textContent = name(r).toUpperCase();
+      c.querySelector('.fq-i').textContent = 'LVL ' + (r.lvl || 1) + ' · ICE ' + ice(r) + (r.city ? ' · ' + r.city : '');
+      var y = el('button', 'btn yes', 'ACCEPTER'), n = el('button', 'btn', 'REFUSER');
+      y.addEventListener('click', function () { buddies.accept(r); C.say(C.line('buddy.accepted', 'C\'est fait, vous êtes amis : {0}.', name(r))); });
+      n.addEventListener('click', function () { buddies.refuse(r); });
+      c.querySelector('.fq-a').appendChild(y); c.querySelector('.fq-a').appendChild(n);
+      box.appendChild(c);
+    });
+  }
+  setTimeout(renderRequests, 0);
 
   // ma fiche (ville seulement si j'ai choisi d'apparaître sur la carte)
   function me(type) {
@@ -47,6 +82,7 @@ var C = window.C || (window.C = {});
     request: function (code) { code = clean(code); if (data.asked.indexOf(code) < 0) data.asked.push(code); C.save(); return post(code, me('req')); },
     accept: function (r) {
       data.requests.splice(data.requests.indexOf(r), 1);
+      r.from = r.from || r.name;
       var b = upsert(r);
       post(b.code, me('ok'));
       C.unlock('friend');
@@ -59,6 +95,19 @@ var C = window.C || (window.C = {});
       data.lastBroadcast = now(); C.save();
       data.buddies.forEach(function (b) { post(b.code, me('up')); });
     },
+    // l'ICE fond d'un niveau par semaine sans entraînement
+    checkDecay: function () {
+      var t = now(), dropped = 0;
+      if (!data.iceStamp) { data.iceStamp = t; C.save(); return; }
+      while (t - data.iceStamp >= WEEK) { if (data.ice > 1) { data.ice--; dropped++; } data.iceStamp += WEEK; }
+      if (!dropped) return;
+      C.save();
+      C.alert('ICE EN FONTE', C.line('ice.decay', 'Ton ICE a fondu au niveau {0} faute d\'entretien. Dis « renforce l\'ICE » avant qu\'un ami en profite.', data.ice));
+      buddies.broadcast(true);
+      changed();
+    },
+    touchIce: function () { data.iceStamp = now(); C.save(); },
+    daysBeforeDecay: function () { var l = (data.iceStamp || now()) + WEEK - now(); return l <= 0 ? 0 : Math.ceil(l / 86400); },
     waitMinutes: function (b) { var w = (b.lastHack || 0) + COOLDOWN - now(); return w <= 0 ? 0 : Math.ceil(w / 60); },
     // résultat de ma tentative contre l'ICE d'un ami
     hacked: function (b, win) {
@@ -75,6 +124,7 @@ var C = window.C || (window.C = {});
       changed();
     },
     iceUp: function () {
+      buddies.touchIce();
       if (data.ice < 10) data.ice++;
       C.cred.add(8);
       if (data.ice >= 5) C.unlock('ice5');
@@ -95,8 +145,13 @@ var C = window.C || (window.C = {});
           data.requests = data.requests.filter(function (r) { return clean(r.code) !== code; });
           var r = JSON.parse(JSON.stringify(m)); r.code = code; r.name = who;
           data.requests.push(r);
+          if (navigator.vibrate) navigator.vibrate(150);
           C.say(C.line('buddy.req', '{0} veut devenir ton ami. Dis « accepte {0} » ou « refuse {0} ».', who));
         }
+      } else if (m.t === 'atk') {
+        if (!known || data.hackable === false) return;
+        upsert(m);
+        C.alert('ALERTE INTRUSION', C.line('hack.incoming', 'Alerte ! {0} est en train d\'attaquer ton ICE (niveau {1}) !', who, data.ice));
       } else if (m.t === 'ok') {
         if (!known && data.asked.indexOf(code) < 0) return;
         data.asked = data.asked.filter(function (c) { return c !== code; });
@@ -113,14 +168,15 @@ var C = window.C || (window.C = {});
         if (m.win) {
           data.ice = Math.max(1, data.ice - 1);
           C.ui.closePanel();
+          var lost = C.line('hack.lost', 'Alerte ! {0} a percé ton ICE. Il est tombé au niveau {1}. Dis « renforce l\'ICE » pour le remonter.', who, data.ice);
           C.glitch('ICE PERCÉ');
-          setTimeout(function () { C.say(C.line('hack.lost', 'Alerte ! {0} a percé ton ICE. Il est tombé au niveau {1}. Dis « renforce l\'ICE » pour le remonter.', who, data.ice)); }, 3400);
+          setTimeout(function () { C.alert('ICE PERCÉ', lost); }, 3400);
           buddies.broadcast(true);
         } else {
           data.hacksBlocked = (data.hacksBlocked || 0) + 1;
           C.cred.add(10);
           C.unlock('wall');
-          C.say(C.line('hack.blocked', '{0} a tenté de pirater ton ICE... et s\'est fait tracer. Ton ICE a tenu !', who));
+          C.alert('ATTAQUE BLOQUÉE', C.line('hack.blocked', '{0} a tenté de pirater ton ICE... et s\'est fait tracer. Ton ICE a tenu !', who));
         }
       } else return;
       changed();
@@ -134,6 +190,7 @@ var C = window.C || (window.C = {});
     var w = buddies.waitMinutes(b);
     if (w > 0) { C.reply('Son ICE est en alerte après ta dernière tentative. Réessaie dans ' + w + ' min.'); return; }
     C.sys('connexion à l\'ICE de ' + name(b) + ' (niveau ' + ice(b) + ')...');
+    post(b.code, me('atk'));   // l'ami reçoit une alerte d'intrusion
     C.game.start(ice(b), name(b), function (res, sec) {
       if (res === 0) { C.sys('netrun abandonné.'); return; }
       buddies.hacked(b, res > 0);
@@ -303,7 +360,7 @@ var C = window.C || (window.C = {});
     }
     if (/^((renforce|renforcer|entraine|entrainer|ameliore|muscle|augmente) (l |l'|mon |ma |les |mes |la )?(ice|glace|glaces|pare feu|protection|defense)|pare feu|entrainement ice|entrainement)$/.test(n)) { C.trainIce(); return true; }
     if (/^(mon ice|niveau d ice|mon niveau d ice|ma protection|mes glaces)$/.test(n)) {
-      reply('Ton ICE est au niveau ' + data.ice + ' / 10. ' + (data.hacksWon || 0) + ' piratage(s) réussi(s), ' + (data.hacksBlocked || 0) + ' tentative(s) bloquée(s). « renforce l\'ICE » pour le monter.');
+      reply('Ton ICE est au niveau ' + data.ice + ' / 10' + (data.ice > 1 ? ' et perdra un niveau dans ' + buddies.daysBeforeDecay() + ' jour(s) sans entraînement' : '') + '. ' + (data.hacksWon || 0) + ' piratage(s) réussi(s), ' + (data.hacksBlocked || 0) + ' tentative(s) bloquée(s). « renforce l\'ICE » pour le monter.');
       return true;
     }
     m = n.match(/^(?:retire|supprime|enleve) (?:l ami |mon ami |de mes amis )?(.+?)(?: de mes amis)?$/);
@@ -326,7 +383,13 @@ var C = window.C || (window.C = {});
     toggle("Visites d'amis", function () { return data.cfg.visits !== false; }, function (v) { data.cfg.visits = v; });
     box.appendChild(el('div', 'section', 'Piratages entre amis'));
     toggle('Mes amis peuvent tenter de me pirater', function () { return data.hackable !== false; }, function (v) { data.hackable = v; buddies.broadcast(true); });
-    row('Mon ICE', 'NIVEAU ' + data.ice + ' / 10 · ' + (data.hacksWon || 0) + ' RÉUSSI(S) · ' + (data.hacksBlocked || 0) + ' BLOQUÉ(S)');
+    var notif = window.Notification ? Notification.permission : 'absent';
+    toggle('Notifications d\'alerte (attaques, ICE)', function () { return notif === 'granted'; }, function () {
+      if (!window.Notification) { C.reply('Ce navigateur ne gère pas les notifications. Sur iPhone : ajoute Capri à l\'écran d\'accueil (iOS 16.4 ou plus), puis réessaie.'); return; }
+      if (Notification.permission === 'granted') { C.reply('Pour couper les notifications, va dans Réglages > Notifications > Capri.'); return; }
+      Notification.requestPermission().then(function (p) { C.reply(p === 'granted' ? 'Notifications activées. Je te préviens si on t\'attaque.' : 'Notifications refusées. Tu peux les autoriser dans les réglages du téléphone.'); });
+    });
+    row('Mon ICE', 'NIVEAU ' + data.ice + ' / 10 · FOND DANS ' + buddies.daysBeforeDecay() + ' J · ' + (data.hacksWon || 0) + ' RÉUSSI(S) · ' + (data.hacksBlocked || 0) + ' BLOQUÉ(S)');
     var b = el('div', 'btnrow');
     var m1 = el('button', 'btn', 'CARTE DES AMIS'); m1.addEventListener('click', function () { C.ui.closePanel(); C.worldMap.open(); });
     var m2 = el('button', 'btn', 'RENFORCER L\'ICE'); m2.addEventListener('click', function () { C.trainIce(); });
