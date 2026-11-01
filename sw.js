@@ -1,5 +1,5 @@
 // Mode hors ligne : l'appli se lance même sans réseau (la radio et la météo, elles, ont besoin d'Internet)
-var CACHE = 'capri-v8';
+var CACHE = 'capri-v9';
 var FILES = ['./', 'index.html', 'css/style.css', 'js/figure.js', 'js/data.js', 'js/effects.js', 'js/stage.js', 'js/brain.js', 'js/gate.js', 'js/extras.js', 'js/social.js', 'js/app.js',
   'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
