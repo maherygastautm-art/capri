@@ -240,6 +240,17 @@ button.chip.on { color: var(--cyan); border-color: var(--cyan); }
 .grange { width: 100%; accent-color: #FCEE0A; }
 .gate .row.tg { cursor: pointer; }
 
+/* bouton micro */
+#mic { border: 1px solid var(--red-dim); background: transparent; color: var(--red-text); font-size: 13px; font-weight: 700; height: 38px; padding: 0 9px; }
+#mic.on { color: var(--cyan); border-color: var(--cyan); background: var(--on); animation: micpulse 0.8s infinite alternate; }
+@keyframes micpulse { from { opacity: 1; } to { opacity: .55; } }
+
+/* photo */
+.photo-view { position: fixed; inset: 0; z-index: 97; background: rgba(5, 5, 8, .92); display: flex; align-items: center; justify-content: center; padding: 14px; }
+.photo-view .pv { width: min(100%, 440px); background: var(--bg); border: 1px solid var(--red); padding: 12px; clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px)); }
+.photo-view img { width: 100%; display: block; margin: 6px 0; -webkit-touch-callout: default; user-select: auto; -webkit-user-select: auto; }
+.photo-view .pvh { font-size: 12px; color: var(--red-dim); text-align: center; }
+
 /* bouton pour arrêter le mode fête */
 #partyStop {
   position: fixed; z-index: 58; left: 50%; top: calc(var(--safe-t) + 48px); transform: translateX(-50%);
