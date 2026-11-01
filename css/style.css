@@ -53,7 +53,7 @@ button.chip.on { color: var(--cyan); border-color: var(--cyan); }
 
 /* ---------- panneau de discussion (style menu Cyberpunk 2077) ---------- */
 #panel {
-  position: fixed; z-index: 10; left: 8px; right: 8px; bottom: calc(var(--bar-h) + var(--safe-b) + 4px);
+  position: fixed; z-index: 10; left: 8px; right: 8px; bottom: calc(var(--bar-h) + var(--safe-b) + 4px + var(--kb, 0px));
   height: min(54vh, calc(var(--vh) - 260px)); min-height: 260px; transition: transform .18s ease-out, opacity .18s;
   transform-origin: 50% 100%;
 }
@@ -107,7 +107,7 @@ button.chip.on { color: var(--cyan); border-color: var(--cyan); }
 
 /* ---------- barre de saisie ---------- */
 #inputBar {
-  position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; height: calc(var(--bar-h) + var(--safe-b));
+  position: fixed; z-index: 30; left: 0; right: 0; bottom: var(--kb, 0px); height: calc(var(--bar-h) + var(--safe-b));
   padding: 8px 10px calc(8px + var(--safe-b)); display: flex; align-items: center; gap: 8px;
   background: linear-gradient(rgba(10, 11, 17, .85), rgba(10, 11, 17, .98)); border-top: 1px solid var(--red-dim);
 }
@@ -359,3 +359,22 @@ button.chip.on { color: var(--cyan); border-color: var(--cyan); }
 .in-btns .cnt { border-color: var(--cyan); color: var(--cyan); font-weight: 700; }
 #alerts { position: fixed; z-index: 120; left: 10px; right: 10px; top: calc(var(--safe-t) + 8px); display: flex; flex-direction: column; gap: 6px; } #alerts .alertbar { position: relative; left: auto; right: auto; top: auto; }
 .row .rt.cp { display: flex; align-items: center; gap: 8px; } .row .rt.cp .cpy { padding: 2px 10px; font-size: 12px; }
+
+/* piratage subi : texte buggé */
+.hacked { position: fixed; inset: 0; z-index: 140; background: rgba(6, 2, 4, .72); display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none;
+  background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.25) 0 2px, transparent 2px 4px); }
+.hk-t { position: relative; width: 100%; text-align: center; font-family: var(--font); font-weight: 700; font-size: min(11vw, 110px); line-height: 1.05; padding: 0 8px; }
+.hk-t span, .hk-slice { display: block; }
+.hk-t .c, .hk-t .r, .hk-slice { position: absolute; left: 0; right: 0; top: 0; padding: 0 8px; }
+.hk-t .c { color: var(--cyan); opacity: .8; }
+.hk-t .r { color: #FF1E46; opacity: .8; }
+.hk-t .m { position: relative; color: var(--yellow); text-shadow: 0 0 18px rgba(252, 238, 10, .45); }
+.hk-slice { color: var(--yellow); display: none; }
+.hk-bar { width: 50%; height: 4px; margin-top: 14px; }
+.hk-bar i { display: block; height: 100%; width: 0; background: var(--red); }
+.hk-s { margin-top: 8px; color: var(--red); font-family: var(--mono); font-size: 13px; }
+
+/* clavier ouvert (iPhone) : plus de marge pour la barre d'accueil, panneau plus court pour tenir au-dessus */
+:root { --kb: 0px; }
+.kb-open { --safe-b: 0px; }
+.kb-open #panel { height: max(200px, calc(var(--vh) - var(--bar-h) - var(--safe-t) - 70px)); min-height: 0; }
