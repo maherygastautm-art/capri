@@ -499,7 +499,7 @@ var C = window.C || (window.C = {});
         N = ICE >= 8 ? 7 : 6;
         LEN = ICE <= 4 ? 5 : ICE <= 8 ? 6 : 7;
         BUF = LEN + (ICE <= 3 ? 2 : ICE <= 7 ? 1 : 0);
-        LIMIT = Math.max(12, 30 - ICE * 1.6);
+        LIMIT = 30;   // 30 s à tous les niveaux : la difficulté vient de la grille, de la séquence et du démon
         CODES = ALL.slice(0, 6 + (ICE >= 3 ? 1 : 0) + (ICE >= 6 ? 1 : 0));
       }
       open(!!ICE);
@@ -801,10 +801,16 @@ var C = window.C || (window.C = {});
   }
 
   // ---------- clavier de l'iPhone : on suit la zone visible ----------
+  // iOS ne réduit pas la page quand le clavier s'ouvre : les éléments fixés en bas restent derrière lui.
+  // On mesure la hauteur du clavier (--kb) et on remonte la barre de saisie et le panneau d'autant.
   function fitViewport() {
-    var vv = window.visualViewport, h = vv ? vv.height : innerHeight;
-    document.documentElement.style.setProperty('--vh', h + 'px');
+    var vv = window.visualViewport, h = vv ? vv.height : innerHeight, root = document.documentElement;
     if (vv) window.scrollTo(0, 0);
+    var kb = vv ? Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop)) : 0;
+    if (kb < 80) kb = 0;   // petites variations (barre d'adresse) : pas un clavier
+    root.style.setProperty('--vh', h + 'px');
+    root.style.setProperty('--kb', kb + 'px');
+    root.classList.toggle('kb-open', kb > 0);
   }
 
   // ---------- démarrage ----------
@@ -813,6 +819,8 @@ var C = window.C || (window.C = {});
     $('ver').textContent = 'v' + VERSION;
     fitViewport();
     if (window.visualViewport) { visualViewport.addEventListener('resize', fitViewport); visualViewport.addEventListener('scroll', fitViewport); }
+    // le clavier s'ouvre en animation : on remesure pendant qu'il monte / descend
+    ['focus', 'blur'].forEach(function (ev) { input.addEventListener(ev, function () { [50, 250, 500].forEach(function (d) { setTimeout(fitViewport, d); }); }); });
     skyline();
     addEventListener('resize', function () { skyline(); fitViewport(); });
     C.stage.init();

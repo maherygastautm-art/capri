@@ -39,6 +39,37 @@ var C = window.C || (window.C = {});
       navigator.serviceWorker.ready.then(function (reg) { reg.showNotification('Capri — ' + title, { body: text, icon: 'icons/icon-192.png', tag: 'capri-' + title, renotify: true }); }).catch(function () { });
   };
 
+  // ---------- piratage subi : texte buggé « VOUS AVEZ ÉTÉ PIRATÉ » qui apparaît puis disparaît ----------
+  C.hackedText = function (done) {
+    var TXT = 'VOUS AVEZ ÉTÉ PIRATÉ', TOTAL = 3.4;
+    var box = el('div', 'hacked', '<div class="hk-t"><span class="c"></span><span class="r"></span><span class="m"></span></div><div class="hk-bar"><i></i></div><div class="hk-s"></div>');
+    box.querySelectorAll('.hk-t span').forEach(function (s) { s.textContent = TXT; });
+    box.querySelector('.hk-s').textContent = '> ICE COMPROMIS // NETWATCH TRACE 0x' + Math.floor(Math.random() * 0xFFFFFFF).toString(16).toUpperCase();
+    // tranches qui glissent
+    for (var i = 0; i < 3; i++) { var s = el('div', 'hk-slice'); s.textContent = TXT; box.querySelector('.hk-t').appendChild(s); }
+    document.body.appendChild(box);
+    if (navigator.vibrate) navigator.vibrate([80, 40, 80, 40, 200]);
+    var t0 = performance.now(), c = box.querySelector('.c'), r = box.querySelector('.r'), m = box.querySelector('.m'), slices = box.querySelectorAll('.hk-slice');
+    var iv = setInterval(function () {
+      var t = (performance.now() - t0) / 1000;
+      if (t >= TOTAL) { clearInterval(iv); box.remove(); if (done) done(); return; }
+      var on = t < 0.5 ? Math.random() < t / 0.5 + 0.15 : t > TOTAL - 0.7 ? Math.random() > (t - (TOTAL - 0.7)) / 0.7 : Math.random() > 0.06;
+      var heavy = t < 0.5 ? 1 : t > TOTAL - 0.7 ? 0.8 : (Math.random() < 0.15 ? 0.7 : 0.15), dx = (Math.random() - 0.5) * 18 * heavy;
+      box.style.opacity = on ? 1 : 0.15;
+      c.style.transform = 'translate(' + (-3 - 8 * heavy + dx) + 'px,' + (Math.random() - 0.5) * 3 + 'px)';
+      r.style.transform = 'translate(' + (3 + 8 * heavy - dx) + 'px,' + (Math.random() - 0.5) * 3 + 'px)';
+      m.style.opacity = Math.random() < 0.08 ? 0.3 : 1;
+      slices.forEach(function (s) {
+        if (Math.random() > 0.35 * heavy + 0.05) { s.style.display = 'none'; return; }
+        var y = Math.random() * 80, h = 6 + Math.random() * 25;
+        s.style.display = 'block';
+        s.style.clipPath = 'inset(' + y + '% 0 ' + Math.max(0, 100 - y - h) + '% 0)';
+        s.style.transform = 'translateX(' + (Math.random() - 0.5) * 50 * heavy + 'px)';
+      });
+      box.querySelector('.hk-bar i').style.width = Math.min(100, t / 1.2 * 100) + '%';
+    }, 42);
+  };
+
   // ---------- demandes d'ami : cartes en haut à droite, jusqu'à accepter / refuser ----------
   function renderRequests() {
     var box = document.getElementById('freqs');
@@ -111,7 +142,7 @@ var C = window.C || (window.C = {});
     daysBeforeDecay: function () { var l = (data.iceStamp || now()) + WEEK - now(); return l <= 0 ? 0 : Math.ceil(l / 86400); },
     waitMinutes: function (b) { var w = (b.lastHack || 0) + COOLDOWN - now(); return w <= 0 ? 0 : Math.ceil(w / 60); },
     duelActive: function () { return duelActive || (C.intrusion && C.intrusion.active()); },
-    windowFor: function (lvl) { lvl = Math.max(1, Math.min(10, lvl)); return Math.max(12, 30 - lvl * 1.6); },
+    windowFor: function () { return 30; },   // même durée que le breach (app.js)
     // j'attaque : l'ami reçoit l'écran d'intrusion (dur = ma fenêtre)
     attack: function (b) { var m = me('atk'); m.dur = buddies.windowFor(ice(b)); post(b.code, m); },
     // fin de mon breach : j'envoie ma performance puis j'attends le verdict de l'ami
@@ -193,7 +224,7 @@ var C = window.C || (window.C = {});
         if (m.atkHacked) {
           data.ice = Math.max(1, data.ice - 1); C.save();
           var cl = C.line('hack.countered', 'Contre-piratage ! {0} a été plus rapide et a percé ton ICE (niveau {1}).', who, data.ice);
-          C.ui.closePanel(); C.glitch('TU AS ÉTÉ PIRATÉ'); setTimeout(function () { C.alert('TU AS ÉTÉ PIRATÉ', cl); }, 3400);
+          C.ui.closePanel(); C.hackedText(function () { C.alert('VOUS AVEZ ÉTÉ PIRATÉ', cl); });
           buddies.broadcast(true);
         } else if (m.defHacked && p.win) {
           buddies.win(p.b); C.reply(C.line('hack.win', 'On est dedans ! L\'ICE de {0} a cédé.', who)); C.stage.dance();
@@ -221,7 +252,7 @@ var C = window.C || (window.C = {});
     buddies.resolveDefense(code, struck, false);
     if (struck) {
       var lost = C.line('hack.lost', '{0} a percé ton ICE. Il est tombé au niveau {1}. Dis « renforce l\'ICE » pour le remonter.', who, data.ice);
-      C.ui.closePanel(); C.glitch('TU AS ÉTÉ PIRATÉ'); setTimeout(function () { C.alert('TU AS ÉTÉ PIRATÉ', lost); }, 3400);
+      C.ui.closePanel(); C.hackedText(function () { C.alert('VOUS AVEZ ÉTÉ PIRATÉ', lost); });
     } else C.alert('ATTAQUE BLOQUÉE', C.line('hack.blocked', '{0} a tenté de pirater ton ICE... et s\'est fait tracer. Ton ICE a tenu !', who));
   }
 
@@ -310,7 +341,7 @@ var C = window.C || (window.C = {});
       buddies.resolveDefense(bcode, defHacked, atkHacked);
       if (defHacked) {
         var lost = C.line(choice === 2 ? 'hack.lost.race' : 'hack.lost', '{0} a percé ton ICE. Il est tombé au niveau {1}. Dis « renforce l\'ICE » pour le remonter.', name(bud), data.ice);
-        C.ui.closePanel(); C.glitch('TU AS ÉTÉ PIRATÉ'); setTimeout(function () { C.alert('TU AS ÉTÉ PIRATÉ', lost); }, 3400);
+        C.ui.closePanel(); C.hackedText(function () { C.alert('VOUS AVEZ ÉTÉ PIRATÉ', lost); });
       } else if (atkHacked) { C.alert('CONTRE-PIRATAGE RÉUSSI', 'Tu as été plus rapide : l\'ICE de ' + name(bud) + ' a cédé. +Street Cred.'); C.stage.dance(); }
       else C.alert('ATTAQUE BLOQUÉE', name(bud) + ' s\'est fait tracer. Ton ICE a tenu.');
     }

@@ -278,7 +278,7 @@ var C = window.C || (window.C = {});
         ['ORAGE', function () { C.rain('storm', 25); }], ['GARDE', function () { C.guard.start(true); }], ['RADIO', function () { if (C.radio.playing) C.radio.stop(); else C.radio.play(); }],
         ['DANSE', function () { C.stage.dance(); }], ['PHOTO', function () { C.photo(); }], ['GRAFFITI', function () { C.graffiti('CAPRI 2077'); }],
         ['ENTRAÎNEMENT ICE', function () { C.ui.openPanel(); C.trainIce(); }], ['BREACH NETRUN (ICE 6)', function () { C.game.start(6, 'test admin', function (r) { C.sys(r > 0 ? 'test : ICE percé.' : r < 0 ? 'test : tracé.' : 'test abandonné.'); }); }],
-        ['SIMULER UN PIRATAGE SUBI', function () { C.glitch('ICE PERCÉ'); setTimeout(function () { C.say('Simulation : un ami vient de percer ton ICE (rien n\'a changé).'); }, 3400); }]];
+        ['SIMULER UN PIRATAGE SUBI', function () { C.hackedText(function () { C.say('Simulation : un ami vient de percer ton ICE (rien n\'a changé).'); }); }]];
       page.innerHTML = '<div class="section">Déclencher (ferme l\'écran admin)</div><div class="gbtns wrap acts"></div>';
       acts.forEach(function (a) {
         var b = el('button', 'btn', a[0]);
