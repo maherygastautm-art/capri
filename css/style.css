@@ -329,3 +329,21 @@ button.chip.on { color: var(--cyan); border-color: var(--cyan); }
 .g-body.stack .g-quit { margin-top: 2px; }
 #panel.tall { height: calc(var(--vh) - var(--bar-h) - var(--safe-b) - var(--safe-t) - 70px); }
 .fw { height: calc(100% - 96px); min-height: 260px; } .fw-hp { font-size: 15px; letter-spacing: 1px; }
+
+/* alertes et demandes d'ami */
+.alertbar { position: fixed; z-index: 120; left: 10px; right: 10px; top: calc(var(--safe-t) + 8px); background: #2A0709; border: 1px solid var(--red); border-left: 5px solid var(--red);
+  padding: 8px 12px; box-shadow: 0 0 22px rgba(255, 30, 60, .45); animation: alin .25s ease-out, alblink 1s steps(2) 3; transition: opacity .4s; }
+.alertbar b { display: block; color: var(--red); font-size: 16px; letter-spacing: 1px; }
+.alertbar span { color: var(--light); font-size: 14px; }
+.alertbar.out { opacity: 0; }
+@keyframes alin { from { transform: translateY(-30px); opacity: 0; } }
+@keyframes alblink { 50% { border-color: var(--yellow); } }
+#freqs { position: fixed; z-index: 95; right: 8px; top: calc(var(--safe-t) + 46px); width: min(280px, calc(100vw - 16px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.freq { pointer-events: auto; background: var(--bg); border: 1px solid var(--yellow); padding: 8px 12px; clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px)); animation: alin .25s ease-out; }
+.fq-h { font-family: var(--mono); font-size: 10px; color: var(--red-dim); }
+.fq-n { color: var(--yellow); font-size: 20px; font-weight: 700; }
+.fq-i { font-family: var(--mono); font-size: 11px; color: var(--light); }
+.fq-a { display: flex; gap: 8px; margin-top: 6px; }
+.fq-a .btn { font-size: 13px; padding: 3px 12px; }
+.fq-a .btn.yes { border-color: var(--cyan); color: var(--cyan); }
+#alerts { position: fixed; z-index: 120; left: 10px; right: 10px; top: calc(var(--safe-t) + 8px); display: flex; flex-direction: column; gap: 6px; } #alerts .alertbar { position: relative; left: auto; right: auto; top: auto; }
