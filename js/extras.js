@@ -526,7 +526,7 @@ var C = window.C || (window.C = {});
             : 'Synchro activée. Rien à récupérer pour l\'instant : ouvre Capri sur l\'autre appareil, puis redis « synchro maintenant ».');
         });
       } else {
-        sync.start(null).then(function (r) { C.sys('code de synchro : ' + r.code); reply(C.line('sync.code', 'Synchro activée. Sur l\'autre appareil, dis-moi « synchro {0} ». Garde ce code secret.', r.code)); });
+        sync.start(null).then(function (r) { if (C.copy) C.copy(r.code); C.sys('code de synchro : ' + r.code + ' (copié)'); reply(C.line('sync.code', 'Synchro activée. Sur l\'autre appareil, dis-moi « synchro {0} ». Garde ce code secret.', r.code)); });
       }
       return true;
     }
@@ -539,6 +539,7 @@ var C = window.C || (window.C = {});
 
     if (/^(mon code ami|code ami|mon code d ami|code d ami)$/.test(n)) {
       var fc = friends.myCode();
+      if (C.copy) C.copy(fc).then(function (ok) { if (ok) C.sys('(code ami copié dans le presse-papiers)'); });
       C.sys('ton code ami : ' + fc);
       reply(C.line('visit.code', 'Ton code ami : {0}. Tes amis tapent « visite {0} » pour que leur Capri passe te voir.', fc));
       return true;
@@ -592,7 +593,8 @@ var C = window.C || (window.C = {});
       if (v) sync.start(null).then(function (r) { C.sys('code de synchro : ' + r.code + ' — sur le PC, tape « synchro ' + r.code + ' ».'); });
       else sync.stop();
     });
-    row('Code de synchro', data.syncOn && data.syncCode ? data.syncCode : '—');
+    if (C.copyRow) C.copyRow(box, 'Code de synchro', function () { return data.syncOn && data.syncCode ? data.syncCode : ''; });
+    else row('Code de synchro', data.syncOn && data.syncCode ? data.syncCode : '—');
     if (C.socialSettings) C.socialSettings(box, row, toggle);
   };
 
@@ -610,6 +612,7 @@ var C = window.C || (window.C = {});
     setTimeout(function () { if (C.buddies) { C.buddies.checkDecay(); C.buddies.broadcast(false); } }, 8000);
     // boîte des amis relevée plus souvent, pour que les alertes d'attaque arrivent vite
     setInterval(friends.poll, 15000);
+    setInterval(function () { if (C.buddies && C.buddies.duelActive()) friends.poll(); }, 3000);   // duel : relevé plus fréquent
     setInterval(function () { if (C.buddies) C.buddies.checkDecay(); }, 60000);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) { friends.poll(); if (C.buddies) C.buddies.checkDecay(); } });
     document.addEventListener('visibilitychange', function () { if (!document.hidden && data.syncOn) sync.pull(true); });

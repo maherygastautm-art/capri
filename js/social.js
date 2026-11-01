@@ -5,6 +5,7 @@ var C = window.C || (window.C = {});
 
 (function () {
   var data = C.data, COOLDOWN = 10 * 60, WEEK = 7 * 24 * 3600;
+  var pending = null, pendingTimer = 0, duelActive = false;
   ['buddies', 'requests', 'asked'].forEach(function (k) { if (!Array.isArray(data[k])) data[k] = []; });
   if (!data.ice) data.ice = 1;
   if (data.hackable === undefined) data.hackable = true;
@@ -109,18 +110,43 @@ var C = window.C || (window.C = {});
     touchIce: function () { data.iceStamp = now(); C.save(); },
     daysBeforeDecay: function () { var l = (data.iceStamp || now()) + WEEK - now(); return l <= 0 ? 0 : Math.ceil(l / 86400); },
     waitMinutes: function (b) { var w = (b.lastHack || 0) + COOLDOWN - now(); return w <= 0 ? 0 : Math.ceil(w / 60); },
-    // résultat de ma tentative contre l'ICE d'un ami
-    hacked: function (b, win) {
+    duelActive: function () { return duelActive || (C.intrusion && C.intrusion.active()); },
+    windowFor: function (lvl) { lvl = Math.max(1, Math.min(10, lvl)); return Math.max(12, 30 - lvl * 1.6); },
+    // j'attaque : l'ami reçoit l'écran d'intrusion (dur = ma fenêtre)
+    attack: function (b) { var m = me('atk'); m.dur = buddies.windowFor(ice(b)); post(b.code, m); },
+    // fin de mon breach : j'envoie ma performance puis j'attends le verdict de l'ami
+    attackResult: function (b, win, seconds) {
       b.lastHack = now();
-      var m = me('hack'); m.win = win;
-      if (win) {
-        data.hacksWon = (data.hacksWon || 0) + 1;
-        C.cred.add(15 + 3 * ice(b));
-        C.unlock('netrun');
-        if (ice(b) >= 8) C.unlock('netrun8');
-        b.ice = Math.max(1, ice(b) - 1);
-      }
+      C.save();
+      var m = me(win ? 'strike' : 'miss'); if (win) m.tm = Math.round(seconds * 100) / 100;
       post(b.code, m);
+      pending = { b: b, win: win };
+      duelActive = true;
+      clearTimeout(pendingTimer);
+      pendingTimer = setTimeout(function () {   // pas de verdict (ami hors ligne) : on garde notre résultat
+        if (!pending) return;
+        var p = pending; pending = null; duelActive = false;
+        if (p.win) { buddies.win(p.b); C.reply(C.line('hack.win', 'On est dedans ! L\'ICE de {0} a cédé.', name(p.b))); }
+        else C.reply(C.line('hack.fail', 'Tracée... l\'ICE de {0} nous a éjectées.', name(p.b)));
+      }, win ? 40000 : 30000);
+    },
+    win: function (b) {
+      data.hacksWon = (data.hacksWon || 0) + 1;
+      C.cred.add(15 + 3 * ice(b));
+      C.unlock('netrun');
+      if (ice(b) >= 8) C.unlock('netrun8');
+      b.ice = Math.max(1, ice(b) - 1);
+      C.save(); changed();
+    },
+    // côté défenseur : applique le verdict chez moi et l'envoie à l'attaquant
+    resolveDefense: function (code, defHacked, atkHacked) {
+      var b = byCode(code);
+      if (defHacked) data.ice = Math.max(1, data.ice - 1);
+      else if (atkHacked && b) buddies.win(b);
+      else { data.hacksBlocked = (data.hacksBlocked || 0) + 1; C.cred.add(10); C.unlock('wall'); }
+      C.save();
+      if (b) { var m = me('res'); m.defHacked = defHacked; m.atkHacked = atkHacked; post(code, m); }
+      if (defHacked) buddies.broadcast(true);
       changed();
     },
     iceUp: function () {
@@ -149,9 +175,29 @@ var C = window.C || (window.C = {});
           C.say(C.line('buddy.req', '{0} veut devenir ton ami. Dis « accepte {0} » ou « refuse {0} ».', who));
         }
       } else if (m.t === 'atk') {
-        if (!known || data.hackable === false) return;
+        if (!known || data.hackable === false || C.intrusion.active()) return;
         upsert(m);
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
         C.alert('ALERTE INTRUSION', C.line('hack.incoming', 'Alerte ! {0} est en train d\'attaquer ton ICE (niveau {1}) !', who, data.ice));
+        var dur = parseFloat(m.dur); if (!(dur > 0)) dur = buddies.windowFor(data.ice);
+        C.intrusion.show(known, Math.max(8, Math.min(40, dur)));
+      } else if (m.t === 'strike' || m.t === 'miss') {
+        if (!known) return;
+        var w2 = m.t === 'strike', tm = parseFloat(m.tm); if (!(tm > 0)) tm = 999;
+        if (C.intrusion.active() && C.intrusion.code() === code) C.intrusion.attacker(w2, tm);
+        else if (data.hackable !== false) passiveDefense(code, who, w2);
+      } else if (m.t === 'res') {
+        if (!pending || clean(pending.b.code) !== code) return;
+        clearTimeout(pendingTimer);
+        var p = pending; pending = null; duelActive = false;
+        if (m.atkHacked) {
+          data.ice = Math.max(1, data.ice - 1); C.save();
+          var cl = C.line('hack.countered', 'Contre-piratage ! {0} a été plus rapide et a percé ton ICE (niveau {1}).', who, data.ice);
+          C.ui.closePanel(); C.glitch('TU AS ÉTÉ PIRATÉ'); setTimeout(function () { C.alert('TU AS ÉTÉ PIRATÉ', cl); }, 3400);
+          buddies.broadcast(true);
+        } else if (m.defHacked && p.win) {
+          buddies.win(p.b); C.reply(C.line('hack.win', 'On est dedans ! L\'ICE de {0} a cédé.', who)); C.stage.dance();
+        } else C.reply(C.line('hack.fail', 'Tracée... l\'ICE de {0} nous a éjectées.', who));
       } else if (m.t === 'ok') {
         if (!known && data.asked.indexOf(code) < 0) return;
         data.asked = data.asked.filter(function (c) { return c !== code; });
@@ -162,26 +208,22 @@ var C = window.C || (window.C = {});
         upsert(m);
       } else if (m.t === 'del') {
         if (known) data.buddies.splice(data.buddies.indexOf(known), 1);
-      } else if (m.t === 'hack') {
+      } else if (m.t === 'hack') {   // ancienne version de Capri chez l'ami
         if (!known || data.hackable === false) return;
-        upsert(m);
-        if (m.win) {
-          data.ice = Math.max(1, data.ice - 1);
-          C.ui.closePanel();
-          var lost = C.line('hack.lost', 'Alerte ! {0} a percé ton ICE. Il est tombé au niveau {1}. Dis « renforce l\'ICE » pour le remonter.', who, data.ice);
-          C.glitch('ICE PERCÉ');
-          setTimeout(function () { C.alert('ICE PERCÉ', lost); }, 3400);
-          buddies.broadcast(true);
-        } else {
-          data.hacksBlocked = (data.hacksBlocked || 0) + 1;
-          C.cred.add(10);
-          C.unlock('wall');
-          C.alert('ATTAQUE BLOQUÉE', C.line('hack.blocked', '{0} a tenté de pirater ton ICE... et s\'est fait tracer. Ton ICE a tenu !', who));
-        }
+        upsert(m); passiveDefense(code, who, !!m.win);
       } else return;
       changed();
     }
   };
+
+  // piratage subi sans écran (Capri était en arrière-plan pendant l'attaque)
+  function passiveDefense(code, who, struck) {
+    buddies.resolveDefense(code, struck, false);
+    if (struck) {
+      var lost = C.line('hack.lost', '{0} a percé ton ICE. Il est tombé au niveau {1}. Dis « renforce l\'ICE » pour le remonter.', who, data.ice);
+      C.ui.closePanel(); C.glitch('TU AS ÉTÉ PIRATÉ'); setTimeout(function () { C.alert('TU AS ÉTÉ PIRATÉ', lost); }, 3400);
+    } else C.alert('ATTAQUE BLOQUÉE', C.line('hack.blocked', '{0} a tenté de pirater ton ICE... et s\'est fait tracer. Ton ICE a tenu !', who));
+  }
 
   // ---------- jeux ----------
   C.netrun = function (b) {
@@ -190,15 +232,11 @@ var C = window.C || (window.C = {});
     var w = buddies.waitMinutes(b);
     if (w > 0) { C.reply('Son ICE est en alerte après ta dernière tentative. Réessaie dans ' + w + ' min.'); return; }
     C.sys('connexion à l\'ICE de ' + name(b) + ' (niveau ' + ice(b) + ')...');
-    post(b.code, me('atk'));   // l'ami reçoit une alerte d'intrusion
+    buddies.attack(b);   // l'ami reçoit l'écran d'intrusion
     C.game.start(ice(b), name(b), function (res, sec) {
-      if (res === 0) { C.sys('netrun abandonné.'); return; }
-      buddies.hacked(b, res > 0);
-      if (res > 0) {
-        C.sys('ICE de ' + name(b) + ' percé en ' + sec.toFixed(1) + ' s.');
-        C.reply(C.line('hack.win', 'On est dedans ! L\'ICE de {0} a cédé. Je lui laisse un petit tag de ta part.', name(b)));
-        C.stage.dance();
-      } else C.reply(C.line('hack.fail', 'Tracée... l\'ICE de {0} nous a éjectées. {0} va recevoir une alerte de la tentative.', name(b)));
+      // le verdict final vient de l'ami (il peut contre-pirater : le plus rapide gagne)
+      buddies.attackResult(b, res > 0, sec || 0);
+      C.sys(res > 0 ? 'séquence injectée en ' + (sec || 0).toFixed(1) + ' s — en attente de ' + name(b) + '...' : (res === 0 ? 'netrun abandonné — en attente de ' + name(b) + '...' : 'breach raté — en attente de ' + name(b) + '...'));
     });
   };
   C.trainIce = function () {
@@ -209,6 +247,76 @@ var C = window.C || (window.C = {});
       else C.sys('entraînement abandonné.');
     });
   };
+
+  // ---------- écran d'intrusion : barre de chargement + « rien faire » / « contre-piratage » (course) ----------
+  C.intrusion = (function () {
+    var box = null, bud, bcode, dur, choice, t0, raf, resolved;
+    var counterDone, counterWon, counterTime, atkDone, atkWon, atkTime;
+    function elc(tag, cls, html) { var d = document.createElement(tag); if (cls) d.className = cls; if (html != null) d.innerHTML = html; return d; }
+    function show(b, d) {
+      if (box) return;
+      bud = b; bcode = clean(b.code); dur = d; choice = 0; resolved = false;
+      counterDone = atkDone = false; t0 = performance.now();
+      box = elc('div', 'intru', '<div class="in-card"><div class="in-t">⚠ INTRUSION DÉTECTÉE</div>' +
+        '<div class="in-s"></div><div class="in-bar"><i></i><b>INTRUSION 0 %</b></div><div class="in-sub">Il force ton pare-feu. Réagis vite.</div>' +
+        '<div class="in-btns"><button class="btn">RIEN FAIRE</button><button class="btn cnt">CONTRE-PIRATAGE</button></div></div>');
+      box.querySelector('.in-s').textContent = name(b).toUpperCase() + ' ATTAQUE TON ICE (NIVEAU ' + data.ice + ')';
+      var bt = box.querySelectorAll('.in-btns .btn');
+      bt[0].addEventListener('click', chooseNothing);
+      bt[1].addEventListener('click', chooseCounter);
+      document.body.appendChild(box);
+      raf = requestAnimationFrame(tick);
+    }
+    function tick() {
+      if (!box) return;
+      if (choice !== 2) {
+        var p = Math.min(1, (performance.now() - t0) / 1000 / dur);
+        box.querySelector('.in-bar i').style.width = (p * 100) + '%';
+        box.querySelector('.in-bar b').textContent = 'INTRUSION ' + Math.round(p * 100) + ' %';
+        if (p >= 1 && choice === 0) { chooseNothing(); return; }
+      }
+      raf = requestAnimationFrame(tick);
+    }
+    function chooseNothing() {
+      if (choice) return;
+      choice = 1;
+      box.querySelector('.in-btns').style.display = 'none';
+      box.querySelector('.in-sub').textContent = 'Tu laisses faire. Intrusion en cours...';
+      resolve();
+    }
+    function chooseCounter() {
+      if (choice) return;
+      choice = 2;
+      remove();   // on bascule sur le breach (le plus rapide pirate l'autre)
+      C.ui.openPanel();
+      C.game.start(ice(bud), name(bud), function (res, sec) {
+        counterDone = true; counterWon = res > 0; counterTime = sec || 0;
+        C.sys('breach terminé — calcul du vainqueur...');
+        resolve();
+      });
+    }
+    function attacker(win, t) { atkDone = true; atkWon = win; atkTime = t; resolve(); }
+    function resolve() {
+      if (resolved) return;
+      var defHacked, atkHacked = false;
+      if (choice === 1) { if (!atkDone) return; defHacked = atkWon; }
+      else {
+        if (!counterDone) return;
+        if (!counterWon) defHacked = true;
+        else { if (!atkDone) return; atkHacked = !atkWon || counterTime <= atkTime; defHacked = !atkHacked; }
+      }
+      resolved = true; duelActive = false;
+      remove();
+      buddies.resolveDefense(bcode, defHacked, atkHacked);
+      if (defHacked) {
+        var lost = C.line(choice === 2 ? 'hack.lost.race' : 'hack.lost', '{0} a percé ton ICE. Il est tombé au niveau {1}. Dis « renforce l\'ICE » pour le remonter.', name(bud), data.ice);
+        C.ui.closePanel(); C.glitch('TU AS ÉTÉ PIRATÉ'); setTimeout(function () { C.alert('TU AS ÉTÉ PIRATÉ', lost); }, 3400);
+      } else if (atkHacked) { C.alert('CONTRE-PIRATAGE RÉUSSI', 'Tu as été plus rapide : l\'ICE de ' + name(bud) + ' a cédé. +Street Cred.'); C.stage.dance(); }
+      else C.alert('ATTAQUE BLOQUÉE', name(bud) + ' s\'est fait tracer. Ton ICE a tenu.');
+    }
+    function remove() { if (raf) cancelAnimationFrame(raf); if (box) { box.remove(); box = null; } }
+    return { show: show, attacker: attacker, active: function () { return !!box || (choice === 2 && !resolved); }, code: function () { return bcode; } };
+  })();
 
   // ---------- carte du monde ----------
   C.worldMap = (function () {
@@ -319,6 +427,29 @@ var C = window.C || (window.C = {});
 
   function el(tag, cls, html) { var d = document.createElement(tag); if (cls) d.className = cls; if (html) d.innerHTML = html; return d; }
 
+  // copie dans le presse-papiers (avec repli pour les vieux navigateurs)
+  C.copy = function (text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return fallbackCopy(text); });
+    return Promise.resolve(fallbackCopy(text));
+  };
+  function fallbackCopy(text) {
+    try { var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); var ok = document.execCommand('copy'); ta.remove(); return ok; } catch (e) { return false; }
+  }
+  // ligne réglage avec un code et un bouton COPIER
+  C.copyRow = function (box, label, getCode) {
+    var r = el('div', 'row', '<div class="lb"></div><div class="rt cp"><span></span><button class="btn cpy">COPIER</button></div>');
+    r.querySelector('.lb').textContent = label;
+    var val = r.querySelector('span'), btn = r.querySelector('.cpy');
+    function show() { var c = getCode(); val.textContent = c || '—'; btn.style.display = c ? '' : 'none'; }
+    show();
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var c = getCode(); if (!c) return;
+      C.copy(c).then(function (ok) { if (ok) { btn.textContent = 'COPIÉ ✓'; setTimeout(function () { btn.textContent = 'COPIER'; }, 1500); } });
+    });
+    box.appendChild(r);
+  };
+
   // ---------- commandes ----------
   C.trySocial = function (n, t, reply, ask) {
     var m = t.match(/^(?:ami|ajoute|ajoute l'ami|ajoute ami|ajouter|ajoute en ami|deviens ami avec|demande d'ami a|demande d'ami à)\s+(AMI[\-\s]?[A-Za-z0-9]{4}[\-\s]?[A-Za-z0-9]{4})$/i);
@@ -377,7 +508,7 @@ var C = window.C || (window.C = {});
   // ---------- réglages ----------
   C.socialSettings = function (box, row, toggle) {
     box.appendChild(el('div', 'section', 'Amis et carte du monde'));
-    row('Mon code ami', C.friends.myCode());
+    C.copyRow(box, 'Mon code ami', function () { return C.friends.myCode(); });
     row('Amis', data.buddies.length + ' AMI(S)' + (data.requests.length ? ' · ' + data.requests.length + ' DEMANDE(S)' : ''));
     toggle('Apparaître sur la carte (ville seulement)', function () { return !!data.onMap; }, function (v) { data.onMap = v; buddies.broadcast(true); });
     toggle("Visites d'amis", function () { return data.cfg.visits !== false; }, function (v) { data.cfg.visits = v; });
