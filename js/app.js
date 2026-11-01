@@ -49,6 +49,7 @@ var C = window.C || (window.C = {});
   };
   function speak(t) {
     if (!data.cfg.voice || !window.speechSynthesis) return;
+    if (C.voice) { C.voice.speak(t); return; }
     try {
       speechSynthesis.cancel();
       var u = new SpeechSynthesisUtterance(t.replace(/[«»*]/g, ''));
@@ -142,6 +143,17 @@ var C = window.C || (window.C = {});
     C.handle(t);
   }
 
+  // ---------- micro ----------
+  C.startMic = function () {
+    ui.openPanel();
+    var mic = $('mic');
+    mic.classList.add('on');
+    input.placeholder = 'Je t\'écoute... parle maintenant';
+    C.mic.listen(function (text) { mic.classList.remove('on'); input.placeholder = 'Parle à Capri...'; C.unlock('voice'); send(text); },
+      function (msg) { mic.classList.remove('on'); input.placeholder = 'Parle à Capri...'; C.reply(msg); });
+    setTimeout(function () { mic.classList.remove('on'); input.placeholder = 'Parle à Capri...'; }, 9000);
+  };
+
   // ---------- commandes et réglages ----------
   function buildCommands() {
     var box = $('cmds');
@@ -183,6 +195,8 @@ var C = window.C || (window.C = {});
     box.appendChild(el('div', 'section', 'Capri'));
     var info = [['Confiance', data.trust + ' / 100 — ' + C.tierName().toUpperCase()], ['Ville (météo)', data.city || '—'], ['Version', 'v' + VERSION]];
     info.forEach(function (i) { var r = el('div', 'row', '<div class="lb"></div><div class="rt"></div>'); r.querySelector('.lb').textContent = i[0]; r.querySelector('.rt').textContent = i[1]; box.appendChild(r); });
+    C.extraSettings(box, function (lb, rt) { var r = el('div', 'row', '<div class="lb"></div><div class="rt"></div>'); r.querySelector('.lb').textContent = lb; r.querySelector('.rt').textContent = rt; box.appendChild(r); },
+      function (lb, get, set) { var on = get(); var r = el('div', 'row', '<div class="lb"></div><div class="toggle' + (on ? ' on' : '') + '"><span class="st">' + (on ? 'ON' : 'OFF') + '</span><div class="track"><i></i></div></div>'); r.querySelector('.lb').textContent = lb; r.addEventListener('click', function () { set(!get()); C.save(); buildSettings(); }); box.appendChild(r); });
     var b = el('div', 'btnrow');
     var reset = el('button', 'btn', 'RÉINITIALISER CAPRI');
     reset.addEventListener('click', function () { if (confirm('Effacer toute la mémoire de Capri (confiance, souvenirs, succès) ?')) C.resetAll(); });
@@ -286,6 +300,7 @@ var C = window.C || (window.C = {});
       $('partyStop').classList.remove('hidden');
       if (announce) C.say(C.line('party.on', 'Mode fête activé ! Monte le son, choom !'));
       C.unlock('party');
+      C.cred.add(5);
       C.loop(function (t) {
         ps.t = t;
         if (ps.end >= 0) {
@@ -428,6 +443,7 @@ var C = window.C || (window.C = {});
         C.unlock('breach1');
         if (elapsed < 8) C.unlock('breachfast');
         if (data.breachWins >= 10) C.unlock('breach10');
+        C.cred.add(25);
       } else if (res < 0) {
         C.sys('breach échoué.');
         C.reply(C.line('gamelose', "Raté... l'ICE t'a eu. Tape « jeu » pour retenter."));
@@ -601,6 +617,7 @@ var C = window.C || (window.C = {});
         C.say(C.line('fight.win', 'Et reste dehors !'));
         C.unlock('rivalwin');
         if (data.rivalWins >= 3) C.unlock('rival3');
+        C.cred.add(20);
         C.bond(1);
       } else {
         C.say(C.line('fight.lose', "Elle m'a eue... La prochaine fois, je la flatline."));
@@ -640,6 +657,7 @@ var C = window.C || (window.C = {});
     var st = C.stage.st;
     if (!data.cfg.remarks || ui.open || st.sleeping || C.stage.busy() || document.hidden) return;
     var mem = Math.random() < 0.4 ? C.memRemark() : null;
+    if (!mem && C.cred.level() >= 4 && Math.random() < 0.35) mem = C.line(C.cred.level() >= 8 && Math.random() < 0.5 ? 'remark.cred2' : 'remark.cred1', '');
     C.stage.say(mem || C.line('remark', pick(['Systèmes nominaux. Enfin... presque.', '*bzzt* ... pardon, petit bug.', 'Je surveille le réseau. Rien à signaler.'])));
   };
   function scheduleGlitch() {
@@ -684,6 +702,7 @@ var C = window.C || (window.C = {});
     document.querySelectorAll('.tab').forEach(function (t) { t.addEventListener('click', function () { selectTab(+t.dataset.tab); }); });
     document.querySelectorAll('.key[data-step]').forEach(function (k) { k.addEventListener('click', function () { selectTab((curTab + 3 + +k.dataset.step) % 3); }); });
     $('closePanel').addEventListener('click', ui.closePanel);
+    $('mic').addEventListener('click', C.startMic);
     $('partyStop').addEventListener('click', function () { C.party.stop(); C.say(C.line('party.off', 'Fin de la fête. Je range les néons.')); });
     $('inputBar').addEventListener('submit', function (e) { e.preventDefault(); var t = input.value; input.value = ''; send(t); });
     input.addEventListener('focus', function () { ui.openPanel(); });
@@ -726,6 +745,7 @@ var C = window.C || (window.C = {});
       })();
       document.addEventListener('visibilitychange', onVisible);
       data.lastSeen = Date.now(); C.save();
+      C.startBackground();
     }
 
     if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () { });

@@ -66,7 +66,11 @@ var C = window.C || (window.C = {});
   };
 
   // ---------- modes ----------
-  function setMode(m, dur) { st.mode = m; st.modeT = 0; st.modeDur = dur || 0; st.animT = 0; }
+  // chaque danse pioche parmi celles débloquées par la Street Cred (ou celle demandée)
+  function setMode(m, dur) {
+    if (m === 'dance' && (st.mode !== 'dance' || st.nextDance)) { st.danceAnim = st.nextDance || (C.cred ? C.cred.randomDance() : 'dance'); st.nextDance = null; }
+    st.mode = m; st.modeT = 0; st.modeDur = dur || 0; st.animT = 0;
+  }
   function land() { st.x = clampX(st.x); sparks(st.x, st.y, 12); setMode('land', 0.4); }
 
   function chooseNext() {
@@ -171,7 +175,7 @@ var C = window.C || (window.C = {});
       case 'sit': return 'sit';
       case 'sleep': return 'sleep';
       case 'wave': return 'wave';
-      case 'dance': return 'dance';
+      case 'dance': return st.danceAnim || 'dance';
       case 'held': return 'held';
       case 'fall': return 'fall';
       case 'jump': return st.modeT < 0.15 ? 'crouch' : 'fall';
@@ -284,6 +288,7 @@ var C = window.C || (window.C = {});
     if (st.mode === 'netrun') drawCables();
     drawFx(dt, false);
     if (C.vex) C.vex.draw(dt);
+    if (C.visitor) C.visitor.draw(dt);
     var hop = st.bounceT > 0 ? Math.sin(Math.PI * st.bounceT / 0.18) * 12 : 0;
     if (!stage.hidden) {
       var p = C.pose(anim(), st.animT), g = st.glitchT > 0;
@@ -292,7 +297,7 @@ var C = window.C || (window.C = {});
         drawFig(p, st.x + (3 + rnd() * 3) * S, st.y - hop, st.dir, '#FF1E46', null, 0.7);
       }
       ctx.shadowColor = 'rgba(139,61,255,.55)'; ctx.shadowBlur = 12;
-      drawFig(p, st.x + (g ? Math.round(rr(-2, 2)) : 0), st.y - hop, st.dir, null, null, 1);
+      drawFig(p, st.x + (g ? Math.round(rr(-2, 2)) : 0), st.y - hop, st.dir, null, C.cred ? C.cred.palette() : null, 1);
       ctx.shadowBlur = 0;
     }
     drawFx(dt, true);
@@ -376,7 +381,7 @@ var C = window.C || (window.C = {});
   stage.dashRandom = function () { stage.dashTo(rr(40, W - 40)); };
   stage.come = function () { stage.dashTo(W / 2); };
   stage.wave = function () { setMode('wave', 2.2); };
-  stage.dance = function () { st.sleeping = false; setMode('dance', 5); };
+  stage.dance = function (style) { st.sleeping = false; st.nextDance = style || null; setMode('dance', 5); };
   stage.think = function (s) { setMode('think', s || 2); };
   stage.setSleep = function (s) { st.sleeping = s; if (s) setMode('sleep', 0); else setMode('wave', 1.5); };
   stage.setChatOpen = function (open) {

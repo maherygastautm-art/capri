@@ -6,11 +6,12 @@ var C = window.C || (window.C = {});
   var KEY = 'capri.v1';
   var DEFAULTS = {
     cfg: { voice: false, wander: true, remarks: true, glitches: true, breach: true, personality: true, memory: true, anniversaries: true,
-      achievements: true, radio: true, party: true, weather: true, rival: true, shake: true, guard: true },
+      achievements: true, radio: true, party: true, weather: true, rival: true, shake: true, guard: true, visits: true },
     trust: 5, messages: 0, breachWins: 0, rivalWins: 0, unlocked: {},
     userName: '', favGame: '', project: '', birthday: '', firstMet: '', lastCelebrated: '', likes: [], dislikes: [],
     city: '', lat: 0, lon: 0, station: 0, lastSeen: 0,
-    lastName: '', age: '', country: '', profileDone: false, passHash: '', passSalt: '', askPassword: true, contacts: {}
+    lastName: '', age: '', country: '', profileDone: false, passHash: '', passSalt: '', askPassword: true, contacts: {},
+    cred: 0, skin: 'classique', lastDaily: '', notes: [], voiceName: '', voiceFx: 'normale', syncOn: false, syncCode: '', syncStamp: 0, syncHash: '', friendCode: '', lastVisit: 0
   };
   var data;
   try { data = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { data = null; }
@@ -181,6 +182,7 @@ var C = window.C || (window.C = {});
     var h = new Date().getHours();
     if (h >= 3 && h < 5) C.unlock('night');
     C.bond(polite ? 2 : 1);
+    if (C.cred) C.cred.add(2);
     if (data.cfg.personality && C.tier() === 0) {
       if (polite) { if (Math.random() < 0.4) prefix = C.line('polite', ''); }
       else if (/^(lance|ouvre|ferme|cherche|viens|danse|dors|bouge|fais|mets)\b/.test(n) && Math.random() < 0.3) prefix = C.line('order', '');
@@ -326,6 +328,7 @@ var C = window.C || (window.C = {});
     var m, s = C.stage;
 
     if (tryMessage(raw)) return true;
+    if (C.tryNew && C.tryNew(n, raw, reply, ask, P)) return true;
 
     if (/^(aide|help|commandes|tu sais faire quoi|que sais tu faire|qu est ce que tu sais faire)$/.test(n)) {
       reply('Dis-moi par exemple « mets de la musique », « mode fête », « jeu », « météo », « combat » ou « je m\'appelle ... ». Tout est dans l\'onglet COMMANDES.');

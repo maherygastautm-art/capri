@@ -426,6 +426,47 @@ var C = window.C || (window.C = {});
     solve(p);
     return p;
   }
+  // Voguing (Street Cred 3)
+  function voguing(t) {
+    var p = stand();
+    p.Face = 1;
+    switch (Math.floor(t * 3) % 4) {
+      case 0: p.HaF = P(70, 44); p.ElF = P(84, 58); p.HaB = P(52, 44); p.ElB = P(38, 58); p.Tilt = -6; break;
+      case 1: p.HaF = P(92, 72); p.ElF = P(80, 62); p.HaB = P(36, 90); p.ElB = P(44, 78); moveUpper(p, 2, 0); break;
+      case 2: p.HaF = P(62, 60); p.ElF = P(80, 70); p.HaB = P(30, 52); p.ElB = P(40, 64); p.Tilt = 8; p.FoF = P(76, 165); break;
+      default: p.HaF = P(86, 34); p.ElF = P(76, 50); p.HaB = P(56, 98); p.ElB = P(48, 84); p.Hip.x -= 3; moveUpper(p, -2, 0);
+    }
+    p.KnF = bend(add(p.Hip, P(3, 0)), p.FoF, 61, 1);
+    p.KnB = bend(add(p.Hip, P(-3, 0)), p.FoB, 61, 1);
+    return p;
+  }
+  // Breakdance (Street Cred 6)
+  function breakdance(t) {
+    var p = pose(), k = Math.floor(t * 4) % 4;
+    p.Face = 1;
+    p.Hip = P(58, 132); p.Neck = P(68, 106); p.Head = P(75, 90);
+    p.ShF = P(70, 110); p.ShB = P(64, 108);
+    p.HaF = P(84, 165); p.ElF = bend(p.ShF, p.HaF, 34, -1);
+    p.HaB = k % 2 === 0 ? P(40, 96) : P(46, 120); p.ElB = bend(p.ShB, p.HaB, 34, -1);
+    p.FoF = [P(26, 150), P(40, 165), P(92, 150), P(70, 165)][k];
+    p.FoB = [P(80, 165), P(18, 140), P(44, 165), P(28, 128)][k];
+    p.KnF = bend(add(p.Hip, P(3, 0)), p.FoF, 61, 1);
+    p.KnB = bend(add(p.Hip, P(-3, 0)), p.FoB, 61, 1);
+    p.Tilt = k % 2 === 0 ? 10 : -4; p.ScarfDir = P(-1, -0.4); p.ScarfStretch = 1.3;
+    return p;
+  }
+  // Glitch (Street Cred 10)
+  function glitchDance(t) {
+    var p = stand(), f = Math.floor(t * 12);
+    function j(i) { var v = Math.sin((f + i * 7) * 12.9898) * 43758.5453; return v - Math.floor(v) - 0.5; }
+    p.Face = f % 9 === 0 ? 3 : 1;
+    moveUpper(p, j(1) * 10, j(2) * 6);
+    p.Hip.x += j(3) * 6; p.Tilt = j(4) * 30;
+    p.HaF = P(70 + j(5) * 40, 60 + j(6) * 50); p.HaB = P(48 + j(7) * 40, 60 + j(8) * 50);
+    p.FoF = P(68 + j(9) * 16, 165); p.FoB = P(52 + j(10) * 16, 165);
+    solve(p);
+    return p;
+  }
   function held(t) {
     var p = pose(), s = Math.sin(t * 7) * 4;
     p.Hip = P(60, 112); p.Neck = P(60, 76); p.Head = P(60, 58);
@@ -473,6 +514,9 @@ var C = window.C || (window.C = {});
       case 'sleep': p = sit(t, true); break;
       case 'wave': p = wave(t); break;
       case 'dance': p = dance(t); break;
+      case 'dance2': p = voguing(t); break;
+      case 'dance3': p = breakdance(t); break;
+      case 'dance4': p = glitchDance(t); break;
       case 'talk': p = talk(t); break;
       case 'think': p = think(t); break;
       case 'held': p = held(t); break;
