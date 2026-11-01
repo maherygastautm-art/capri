@@ -1,5 +1,5 @@
 // Mode hors ligne : l'appli se lance même sans réseau (la radio et la météo, elles, ont besoin d'Internet)
-var CACHE = 'capri-v7';
+var CACHE = 'capri-v8';
 var FILES = ['./', 'index.html', 'css/style.css', 'js/figure.js', 'js/data.js', 'js/effects.js', 'js/stage.js', 'js/brain.js', 'js/gate.js', 'js/extras.js', 'js/social.js', 'js/app.js',
   'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
@@ -11,6 +11,15 @@ self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
     return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
+});
+
+// un toucher sur une notification d'alerte ouvre (ou ramène) Capri
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window' }).then(function (list) {
+    if (list.length) return list[0].focus();
+    return self.clients.openWindow('./');
+  }));
 });
 
 // fichiers de l'appli : réseau d'abord (pour les mises à jour), cache si hors ligne
