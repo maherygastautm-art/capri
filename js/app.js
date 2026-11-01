@@ -400,10 +400,11 @@ var C = window.C || (window.C = {});
   };
   function show(sky, sec) { if (C.rainActive) return; lastShow = Date.now(); C.rain(sky, sec); C.unlock('rainneon'); }
 
-  // ---------- mini-jeu de hacking ----------
+  // ---------- mini-jeux : breach (normal ou contre l'ICE d'un ami) et pare-feu ----------
   var game = C.game = { playing: false };
   (function () {
-    var N = 5, BUF = 6, LEN = 4, LIMIT = 25, box, grid, used, seq, picks, progress, step, lastR, lastC, started, over, t0, timer, elapsed;
+    var ALL = ['1C', '55', 'BD', 'E9', '7A', 'FF', '1E', '8D'];
+    var N, BUF, LEN, LIMIT, ICE, CODES, CW, CH, box, grid, used, path, seq, picks, progress, step, lastR, lastC, started, over, t0, timer, elapsed, nextScramble, onDone, stopper;
     function selectable(r, c) { return !over && !used[r][c] && (step % 2 === 0 ? r === lastR : c === lastC); }
     function draw() {
       var g = box.querySelector('.g-grid'), cells = g.querySelectorAll('.g-cell');
@@ -414,26 +415,29 @@ var C = window.C || (window.C = {});
       }
       var band = g.querySelector('.g-band');
       band.style.display = over ? 'none' : 'block';
-      if (step % 2 === 0) band.style.cssText += ';left:5px;top:' + (5 + lastR * 32) + 'px;width:190px;height:32px';
-      else band.style.cssText += ';left:' + (5 + lastC * 38) + 'px;top:5px;width:38px;height:160px';
+      if (step % 2 === 0) band.style.cssText += ';left:5px;top:' + (5 + lastR * CH) + 'px;width:' + (CW * N) + 'px;height:' + CH + 'px';
+      else band.style.cssText += ';left:' + (5 + lastC * CW) + 'px;top:5px;width:' + CW + 'px;height:' + (CH * N) + 'px';
       var sq = box.querySelectorAll('.g-seq span');
       for (var i = 0; i < LEN; i++) sq[i].className = i < progress ? 'ok' : i === progress && !over ? 'next' : '';
-      if (started && !over) box.querySelector('.g-status').textContent = '> injection ' + picks + '/' + BUF;
+      if (picks > 0 && !over) { var st = box.querySelector('.g-status'); st.textContent = '> injection ' + picks + '/' + BUF; st.style.color = ''; }
+    }
+    function banner(text, good) {
+      var b = el('div', 'g-banner', text);
+      b.style.background = good ? 'var(--on)' : 'var(--off)';
+      b.style.color = good ? 'var(--cyan)' : 'var(--red)';
+      box.appendChild(b);
     }
     function finish(res) {
       over = true;
       elapsed = (performance.now() - t0) / 1000;
-      var b = el('div', 'g-banner', res > 0 ? 'ACCÈS AUTORISÉ' : 'ÉCHEC DU BREACH');
-      b.style.background = res > 0 ? 'var(--on)' : 'var(--off)';
-      b.style.color = res > 0 ? 'var(--cyan)' : 'var(--red)';
-      box.appendChild(b);
+      banner(res > 0 ? (ICE ? 'ICE PERCÉ' : 'ACCÈS AUTORISÉ') : (ICE ? 'TRACÉ — DÉCONNECTÉ' : 'ÉCHEC DU BREACH'), res > 0);
       box.querySelector('.g-status').textContent = res > 0 ? '> ICE neutralisé' : '> connexion perdue';
       setTimeout(function () { end(res); }, 1600);
     }
+    function close() { clearInterval(timer); game.playing = false; box.classList.add('hidden'); $('panel').classList.remove('tall'); }
     function end(res) {
-      clearInterval(timer);
-      game.playing = false;
-      box.classList.add('hidden');
+      close();
+      if (onDone) { var f = onDone; onDone = null; f(res, elapsed); return; }
       if (res > 0) {
         C.sys('breach réussi en ' + elapsed.toFixed(1) + ' s.');
         C.reply(C.line('gamewin', elapsed < 8 ? "T'es un vrai netrunner, choom." : 'ICE brisé. Pas mal du tout !'));
@@ -463,32 +467,80 @@ var C = window.C || (window.C = {});
       else if (picks >= BUF || !any) finish(-1);
       draw();
     }
-    game.start = function () {
+    // le démon de l'ICE change quelques codes hors du chemin solution
+    function scramble() {
+      var cells = box.querySelectorAll('.g-cell');
+      for (var k = 0; k < 2 + Math.floor(ICE / 3); k++) {
+        var r = Math.floor(Math.random() * N), c = Math.floor(Math.random() * N);
+        if (used[r][c] || path[r][c]) continue;
+        grid[r][c] = pick(CODES);
+        cells[r * N + c].textContent = grid[r][c];
+        cells[r * N + c].classList.add('mut');
+      }
+      var st = box.querySelector('.g-status');
+      st.textContent = '> démon : grille brouillée';
+      st.style.color = 'var(--yellow)';
+    }
+    function open(tall) {
+      if (game.playing) game.abort();
       ui.openPanel();
+      $('panel').classList.toggle('tall', !!tall);   // netrun et pare-feu : panneau agrandi
       selectTab(0);
       box = $('game');
-      box.innerHTML = '<div class="g-head"><div><div class="g-title">BREACH PROTOCOL // MINI-JEU</div><div class="g-help">ligne du haut, puis colonne, puis ligne... reproduis la séquence.</div></div>' +
-        '<div class="g-time">TEMPS<b>25.00</b></div></div><div class="g-body"><div class="g-grid"><div class="g-band"></div></div><div class="g-side">' +
-        '<div class="g-lab">SÉQUENCE REQUISE</div><div class="g-seq"></div><div class="g-lab">BUFFER</div><div class="g-buf"></div><div class="g-status">> en attente du premier code_</div>' +
-        '<div class="g-quit">abandonner</div></div></div>';
       box.classList.remove('hidden');
-      var pr = [0], pc = [Math.floor(Math.random() * N)];
-      pr[1] = 1 + Math.floor(Math.random() * 4); pc[1] = pc[0];
-      pr[2] = pr[1]; pc[2] = (pc[1] + 1 + Math.floor(Math.random() * 4)) % N;
-      pr[3] = (pr[2] + 1 + Math.floor(Math.random() * 4)) % N; pc[3] = pc[2];
-      seq = [0, 1, 2, 3].map(function () { return pick(C.CODES); });
-      grid = []; used = [];
-      for (var r = 0; r < N; r++) {
-        grid.push([]); used.push([]);
-        for (var c = 0; c < N; c++) {
-          var code = pick(C.CODES);
-          for (var i = 0; i < LEN; i++) if (pr[i] === r && pc[i] === c) code = seq[i];
-          grid[r].push(code); used[r].push(false);
+      game.playing = true;
+    }
+    // ice = 0 : partie normale ; 1 à 10 : piratage de l'ICE d'un ami (done(res, secondes) remplace les récompenses)
+    game.start = function (ice, target, done) {
+      ICE = ice || 0;
+      onDone = done || null;
+      if (!ICE) { N = 5; LEN = 4; BUF = 6; LIMIT = 25; CODES = ALL.slice(0, 6); }
+      else {
+        N = ICE >= 8 ? 7 : 6;
+        LEN = ICE <= 4 ? 5 : ICE <= 8 ? 6 : 7;
+        BUF = LEN + (ICE <= 3 ? 2 : ICE <= 7 ? 1 : 0);
+        LIMIT = Math.max(12, 30 - ICE * 1.6);
+        CODES = ALL.slice(0, 6 + (ICE >= 3 ? 1 : 0) + (ICE >= 6 ? 1 : 0));
+      }
+      open(!!ICE);
+      // contre un ami : grille au-dessus, séquence et buffer dessous, le tout doit tenir dans la hauteur du panneau
+      var room = Math.min(box.clientWidth || 330, 420) - 14, high = (box.clientHeight || 360) - 200;
+      CH = ICE ? Math.max(22, Math.min(37, Math.floor(high / N))) : 32;
+      CW = ICE ? Math.min(44, Math.floor(room / N), Math.round(CH * 1.3)) : 38;
+      box.innerHTML = '<div class="g-head"><div><div class="g-title' + (ICE ? ' net' : '') + '"></div><div class="g-help"></div></div>' +
+        '<div class="g-time"><span></span><b>' + LIMIT.toFixed(2) + '</b></div></div><div class="g-body' + (ICE ? ' stack' : '') + '"><div class="g-grid"><div class="g-band"></div></div><div class="g-side">' +
+        '<div class="g-lab">SÉQUENCE REQUISE</div><div class="g-seq"></div><div class="g-lab">BUFFER</div><div class="g-buf"></div><div class="g-status">> en attente du premier code_</div>' +
+        (ICE >= 4 ? '<div class="g-warn">⚠ démon actif : la grille se brouille</div>' : '') + '<div class="g-quit">abandonner</div></div></div>';
+      box.querySelector('.g-title').textContent = ICE ? 'NETRUN // ' + String(target || '').toUpperCase() : 'BREACH PROTOCOL // MINI-JEU';
+      box.querySelector('.g-help').textContent = ICE ? 'ICE niveau ' + ICE + ' — le traçage a déjà commencé.' : 'ligne du haut, puis colonne, puis ligne... reproduis la séquence.';
+      box.querySelector('.g-time span').textContent = ICE ? 'TRAÇAGE' : 'TEMPS';
+      var g = box.querySelector('.g-grid');
+      g.style.gridTemplateColumns = 'repeat(' + N + ', ' + CW + 'px)';
+      g.style.gridAutoRows = CH + 'px';
+      if (ICE) g.style.borderColor = 'var(--yellow)';
+      // chemin solution : ligne 0, puis on alterne colonne / ligne sans repasser par une case
+      var pr = [0], pc = [Math.floor(Math.random() * N)], i, r, c;
+      for (i = 1; i < LEN; i++) {
+        var tries = 0, bad;
+        do {
+          if (i % 2) { pr[i] = Math.floor(Math.random() * N); pc[i] = pc[i - 1]; } else { pr[i] = pr[i - 1]; pc[i] = Math.floor(Math.random() * N); }
+          bad = (i % 2 ? pr[i] === pr[i - 1] : pc[i] === pc[i - 1]);
+          for (var k = 0; k < i; k++) if (pr[k] === pr[i] && pc[k] === pc[i]) bad = true;
+        } while (bad && ++tries < 200);
+      }
+      seq = []; for (i = 0; i < LEN; i++) seq.push(pick(CODES));
+      grid = []; used = []; path = [];
+      for (r = 0; r < N; r++) {
+        grid.push([]); used.push([]); path.push([]);
+        for (c = 0; c < N; c++) {
+          var code = pick(CODES), on = false;
+          for (i = 0; i < LEN; i++) if (pr[i] === r && pc[i] === c) { code = seq[i]; on = true; }
+          grid[r].push(code); used[r].push(false); path[r].push(on);
         }
       }
-      var g = box.querySelector('.g-grid');
       for (r = 0; r < N; r++) for (c = 0; c < N; c++) (function (r, c) {
         var d = el('div', 'g-cell');
+        if (ICE) d.style.fontSize = (CW < 40 ? 14 : 16) + 'px';
         d.addEventListener('click', function () { pickCell(r, c); });
         g.appendChild(d);
       })(r, c);
@@ -496,19 +548,87 @@ var C = window.C || (window.C = {});
       for (i = 0; i < BUF; i++) box.querySelector('.g-buf').appendChild(el('span'));
       box.querySelector('.g-quit').addEventListener('click', game.abort);
       picks = progress = step = lastR = lastC = 0;
-      started = over = false;
-      game.playing = true;
+      over = false;
+      started = !!ICE;   // contre un ami, le traçage démarre tout de suite
+      t0 = performance.now();
+      nextScramble = 6;
+      stopper = function () { over = true; end(0); };
       draw();
       clearInterval(timer);
       timer = setInterval(function () {
         if (!started || over) return;
-        var left = Math.max(0, LIMIT - (performance.now() - t0) / 1000), tb = box.querySelector('.g-time b');
+        var t = (performance.now() - t0) / 1000, left = Math.max(0, LIMIT - t), tb = box.querySelector('.g-time b');
+        if (ICE >= 4 && t >= nextScramble) { draw(); scramble(); nextScramble = t + Math.max(3, 7 - ICE / 3); }
         tb.textContent = left.toFixed(2);
         tb.style.color = left < 5 ? 'var(--red)' : '';
         if (left <= 0) { finish(-1); draw(); }
       }, 33);
     };
-    game.abort = function () { if (!game.playing) return; over = true; end(0); };
+
+    // pare-feu : cliquer les paquets avant qu'ils touchent le noyau ; réussi = done(1)
+    game.firewall = function (level, done) {
+      level = Math.max(1, Math.min(10, level));
+      onDone = done;
+      open(true);
+      var target = 12 + level * 2, hp = 5, score = 0, packets = [], next = 0.6, last = 0, DUR = 30;
+      box.innerHTML = '<div class="g-head"><div><div class="g-title ice">PARE-FEU // RENFORCER L\'ICE</div><div class="g-help">touche les paquets avant qu\'ils touchent le noyau.</div></div>' +
+        '<div class="g-time">TEMPS<b>30.0</b></div></div><div class="fw"><div class="fw-ring r1"></div><div class="fw-ring r2"></div><div class="fw-ring r3"></div><div class="fw-core">ICE</div></div>' +
+        '<div class="fw-foot"><span class="fw-score"></span><span class="fw-hp"></span></div><div class="g-quit">abandonner</div>';
+      box.querySelector('.g-quit').addEventListener('click', game.abort);
+      var fw = box.querySelector('.fw'), core = box.querySelector('.fw-core');
+      var W = fw.clientWidth || 330, H = fw.clientHeight || 300, cx = W / 2, cy = H / 2;
+      function texts(left) {
+        box.querySelector('.g-time b').textContent = left.toFixed(1);
+        box.querySelector('.g-time b').style.color = left < 5 ? 'var(--red)' : '';
+        box.querySelector('.fw-score').textContent = 'BLOQUÉS ' + score + ' / ' + target + '  (ICE ' + level + ' → ' + Math.min(10, level + 1) + ')';
+        var h = box.querySelector('.fw-hp');
+        h.textContent = '■■■■■'.slice(0, hp) + '□□□□□'.slice(0, 5 - hp);
+        h.style.color = hp <= 2 ? 'var(--red)' : '';
+      }
+      function spawn() {
+        var a = Math.random() * Math.PI * 2, x = cx + Math.cos(a) * W * 0.6, y = cy + Math.sin(a) * H * 0.6;
+        x = Math.max(18, Math.min(W - 18, x)); y = Math.max(14, Math.min(H - 14, y));
+        var sp = 40 + level * 6 + Math.random() * 15, dx = cx - x, dy = cy - y, d = Math.hypot(dx, dy);
+        var p = { x: x, y: y, vx: dx / d * sp, vy: dy / d * sp, hp: level >= 5 && Math.random() < 0.25 ? 2 : 1 };
+        p.el = el('div', 'fw-pk' + (p.hp > 1 ? ' armored' : ''), pick(['1C', '55', 'BD', 'E9', '7A', 'FF', '0x', '##']));
+        p.el.addEventListener('pointerdown', function (e) {
+          e.preventDefault();
+          if (over || packets.indexOf(p) < 0) return;
+          if (--p.hp > 0) { p.el.classList.remove('armored'); return; }
+          packets.splice(packets.indexOf(p), 1); p.el.remove(); score++;
+        });
+        fw.appendChild(p.el);
+        packets.push(p);
+      }
+      function stop(res) {
+        over = true;
+        packets.forEach(function (p) { p.el.remove(); }); packets = [];
+        banner(res > 0 ? 'ICE RENFORCÉ — NIVEAU ' + Math.min(10, level + 1) : 'NOYAU COMPROMIS', res > 0);
+        setTimeout(function () { end(res); }, 1800);
+      }
+      over = false;
+      t0 = performance.now();
+      stopper = function () { over = true; packets.forEach(function (p) { p.el.remove(); }); end(0); };
+      texts(DUR);
+      clearInterval(timer);
+      timer = setInterval(function () {
+        if (over) return;
+        var t = (performance.now() - t0) / 1000, dt = t - last; last = t;
+        if (t >= next) { spawn(); next = t + Math.max(0.35, 1.1 - level * 0.07) * (0.7 + Math.random() * 0.6); }
+        for (var i = packets.length - 1; i >= 0; i--) {
+          var p = packets[i];
+          p.x += p.vx * dt; p.y += p.vy * dt;
+          p.el.style.transform = 'translate(' + (p.x - 16) + 'px,' + (p.y - 11) + 'px)';
+          if (Math.hypot(p.x - cx, p.y - cy) < 24) { packets.splice(i, 1); p.el.remove(); hp--; core.classList.remove('hit'); void core.offsetWidth; core.classList.add('hit'); }
+        }
+        var left = Math.max(0, DUR - t);
+        texts(left);
+        if (hp <= 0) stop(-1);
+        else if (left <= 0) stop(score >= target ? 1 : -1);
+      }, 25);
+    };
+
+    game.abort = function () { if (!game.playing) return; if (stopper) stopper(); else { over = true; end(0); } };
   })();
 
   // ---------- garde du téléphone (inactivité ou « je pars ») ----------

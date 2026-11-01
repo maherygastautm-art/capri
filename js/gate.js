@@ -143,7 +143,7 @@ var C = window.C || (window.C = {});
     var x = el('button', 'key gx', 'FERMER');
     x.addEventListener('click', function () { close(w); });
     p.appendChild(x);
-    var tabs = ['PROFIL', 'SÉCURITÉ', 'CAPRI', 'ACTIONS'];
+    var tabs = ['PROFIL', 'SÉCURITÉ', 'CAPRI', 'PROGRESSION', 'RÉSEAU', 'ACTIONS'];
     body.innerHTML = '<nav class="gtabs">' + tabs.map(function (t, i) { return '<button type="button" data-i="' + i + '">' + t + '</button>'; }).join('') + '</nav><div class="gpage"></div>';
     var page = body.querySelector('.gpage');
 
@@ -204,11 +204,81 @@ var C = window.C || (window.C = {});
       page.querySelector('.a4').addEventListener('click', function () { if (confirm('Effacer toute la mémoire de Capri (profil, mot de passe, souvenirs, confiance, succès, contacts) ?')) C.resetAll(); });
     }
 
+    // petits outils pour les nouveaux onglets
+    function buttons(cls, list) {
+      var box = page.querySelector(cls);
+      list.forEach(function (a) { var b = el('button', 'btn', a[0]); b.type = 'button'; b.addEventListener('click', a[1]); box.appendChild(b); });
+    }
+    function toggleRow(label, get, set) {
+      var r = el('div', 'row tg', '<div class="lb"></div><div class="rt"></div>');
+      r.querySelector('.lb').textContent = label;
+      var rt = r.querySelector('.rt');
+      function show() { rt.textContent = get() ? 'ON' : 'OFF'; rt.style.color = get() ? 'var(--cyan)' : 'var(--red-text)'; }
+      show();
+      r.addEventListener('click', function () { set(!get()); C.save(); show(); ok(label + ' : ' + (get() ? 'ON' : 'OFF') + '.'); });
+      return r;
+    }
+
+    function progressTab() {
+      page.innerHTML = '<div class="section">Street Cred</div><div class="gval vc"></div><input class="grange rc" type="range" min="1" max="10" step="1"><div class="gbtns wrap b1"></div>' +
+        '<div class="section">Couleur de Capri</div><div class="gbtns wrap b2"></div>' +
+        '<div class="section">ICE (protection contre les piratages d\'amis)</div><div class="gval vi"></div><input class="grange ri" type="range" min="1" max="10" step="1"><div class="gbtns wrap b3"></div>' +
+        '<div class="section">Voix</div><div class="gbtns wrap b4"></div><div class="tv"></div>' +
+        '<div class="section">Notes</div><div class="gval vn"></div><div class="gbtns wrap b5"></div>';
+      var rc = page.querySelector('.rc'), ri = page.querySelector('.ri');
+      function showCred() { page.querySelector('.vc').textContent = 'Niveau ' + C.cred.level() + ' — ' + C.cred.title() + ' (' + (data.cred || 0) + ' XP)'; rc.value = C.cred.level(); }
+      function showIce() { page.querySelector('.vi').textContent = 'Niveau ' + data.ice + ' / 10 — ' + (data.hacksWon || 0) + ' piratage(s) réussi(s), ' + (data.hacksBlocked || 0) + ' bloqué(s)'; ri.value = data.ice; }
+      function showNotes() { page.querySelector('.vn').textContent = (data.notes || []).length + ' note(s) enregistrée(s).'; }
+      var STEPS = [0, 50, 120, 220, 350, 520, 740, 1000, 1300, 1700];
+      showCred(); showIce(); showNotes();
+      rc.addEventListener('input', function () { data.cred = STEPS[+rc.value - 1]; showCred(); });
+      rc.addEventListener('change', function () { C.save(); C.buddies.broadcast(true); ok('Street Cred réglée au niveau ' + C.cred.level() + '.'); });
+      ri.addEventListener('input', function () { data.ice = +ri.value; showIce(); });
+      ri.addEventListener('change', function () { C.save(); C.buddies.broadcast(true); ok('ICE réglé au niveau ' + data.ice + ' (amis prévenus).'); });
+      buttons('.b1', [['+100 XP', function () { C.cred.add(100); showCred(); ok('+100 XP.'); }], ['REMETTRE À ZÉRO', function () { data.cred = 0; data.skin = 'classique'; C.save(); showCred(); ok('Street Cred remise à zéro.'); }]]);
+      buttons('.b2', C.cred.SKINS.map(function (k) {
+        return [k.name + (k.level > 1 ? ' (niv. ' + k.level + ')' : ''), function () {
+          if (C.cred.level() < k.level) data.cred = STEPS[k.level - 1];
+          data.skin = k.id; C.save(); showCred(); ok('couleur : ' + k.name + '.');
+        }];
+      }));
+      buttons('.b3', [['REMETTRE LES COMPTEURS À ZÉRO', function () { data.hacksWon = data.hacksBlocked = 0; C.save(); showIce(); ok('compteurs remis à zéro.'); }]]);
+      buttons('.b4', [['Normale', 'normale'], ['Robotique', 'robotique'], ['Grésillante', 'gresillante'], ['Glitch', 'glitch']].map(function (f) {
+        return [f[0], function () { data.voiceFx = f[1]; C.save(); C.voice.speak('Voix ' + f[0] + '.'); ok('effet de voix : ' + f[0] + '.'); }];
+      }));
+      page.querySelector('.tv').appendChild(toggleRow('Voix de Capri', function () { return data.cfg.voice; }, function (v) { data.cfg.voice = v; }));
+      buttons('.b5', [['EFFACER LES NOTES', function () { data.notes = []; C.save(); showNotes(); ok('notes effacées.'); }]]);
+    }
+
+    function networkTab() {
+      page.innerHTML = '<div class="section">Synchro PC ↔ iPhone</div><div class="gval vs"></div><div class="gbtns wrap b1"></div>' +
+        '<div class="section">Code ami et amis</div><div class="gval vf"></div><div class="tgs"></div><div class="gbtns wrap b2"></div>';
+      function showSync() { page.querySelector('.vs').textContent = data.syncOn ? 'Active — code ' + data.syncCode : 'Désactivée'; }
+      function showInfo() { page.querySelector('.vf').textContent = 'Code ami : ' + C.friends.myCode() + ' — ' + data.buddies.length + ' ami(s), ' + data.requests.length + ' demande(s)'; }
+      showSync(); showInfo();
+      buttons('.b1', [
+        ['ACTIVER', function () { C.sync.start(null).then(function (r) { showSync(); ok('synchro active, code ' + r.code + '.'); }); }],
+        ['SYNCHRO MAINTENANT', function () { if (!data.syncOn) return ko('la synchro n\'est pas active.'); C.sync.pull(true).then(function (a) { ok(a ? 'mémoire récupérée de l\'autre appareil.' : 'synchro faite.'); }); }],
+        ['NOUVEAU CODE', function () { data.syncCode = ''; data.syncOn = false; C.sync.start(null).then(function (r) { showSync(); ok('nouveau code : ' + r.code + ' (à retaper sur le PC).'); }); }],
+        ['DÉSACTIVER', function () { C.sync.stop(); showSync(); ok('synchro désactivée.'); }]]);
+      var tgs = page.querySelector('.tgs');
+      tgs.appendChild(toggleRow('Apparaître sur la carte (ville seulement)', function () { return !!data.onMap; }, function (v) { data.onMap = v; C.buddies.broadcast(true); }));
+      tgs.appendChild(toggleRow('Les amis peuvent tenter de me pirater', function () { return data.hackable !== false; }, function (v) { data.hackable = v; C.buddies.broadcast(true); }));
+      tgs.appendChild(toggleRow("Visites d'amis", function () { return data.cfg.visits !== false; }, function (v) { data.cfg.visits = v; }));
+      buttons('.b2', [
+        ['CARTE DES AMIS', function () { close(w, function () { C.ui.closePanel(); C.worldMap.open(); }); }],
+        ['RENVOYER MA FICHE', function () { C.buddies.broadcast(true); ok('fiche envoyée à ' + data.buddies.length + ' ami(s).'); }],
+        ['NOUVEAU CODE AMI', function () { if (!confirm('Changer de code ami ? Tes amis actuels ne pourront plus t\'écrire tant qu\'ils n\'ont pas le nouveau code.')) return; data.friendCode = ''; data.lastVisit = 0; C.save(); showInfo(); ok('nouveau code ami : ' + C.friends.myCode() + '.'); }],
+        ['VIDER LA LISTE D\'AMIS', function () { if (!confirm('Retirer tous tes amis et demandes ?')) return; data.buddies.slice().forEach(function (b) { C.buddies.remove(b); }); data.requests = []; data.asked = []; C.save(); showInfo(); ok('liste d\'amis vidée.'); }]]);
+    }
+
     function actionsTab() {
       var acts = [['MODE FÊTE', function () { if (C.party.active()) C.party.stop(); else C.party.start(0, true); }], ['APPARITION BUGGÉE', function () { C.glitch(); }],
         ['BREACH', function () { C.breach(); }], ['COMBAT VEX', function () { C.vexStart(); }], ['PLUIE DE NÉONS', function () { C.rain('rain', 25); }],
         ['ORAGE', function () { C.rain('storm', 25); }], ['GARDE', function () { C.guard.start(true); }], ['RADIO', function () { if (C.radio.playing) C.radio.stop(); else C.radio.play(); }],
-        ['DANSE', function () { C.stage.dance(); }]];
+        ['DANSE', function () { C.stage.dance(); }], ['PHOTO', function () { C.photo(); }], ['GRAFFITI', function () { C.graffiti('CAPRI 2077'); }],
+        ['ENTRAÎNEMENT ICE', function () { C.ui.openPanel(); C.trainIce(); }], ['BREACH NETRUN (ICE 6)', function () { C.game.start(6, 'test admin', function (r) { C.sys(r > 0 ? 'test : ICE percé.' : r < 0 ? 'test : tracé.' : 'test abandonné.'); }); }],
+        ['SIMULER UN PIRATAGE SUBI', function () { C.glitch('ICE PERCÉ'); setTimeout(function () { C.say('Simulation : un ami vient de percer ton ICE (rien n\'a changé).'); }, 3400); }]];
       page.innerHTML = '<div class="section">Déclencher (ferme l\'écran admin)</div><div class="gbtns wrap acts"></div>';
       acts.forEach(function (a) {
         var b = el('button', 'btn', a[0]);
@@ -218,7 +288,7 @@ var C = window.C || (window.C = {});
       });
     }
 
-    var builders = [profileTab, securityTab, capriTab, actionsTab];
+    var builders = [profileTab, securityTab, capriTab, progressTab, networkTab, actionsTab];
     function select(i) {
       body.querySelectorAll('.gtabs button').forEach(function (b, k) { b.classList.toggle('on', k === i); });
       err.textContent = '';

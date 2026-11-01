@@ -163,7 +163,14 @@ var C = window.C || (window.C = {});
     ['voice', 'À voix haute', 'Parler à Capri au micro'],
     ['sync', 'Lien établi', 'Synchroniser Capri entre deux appareils'],
     ['visit', 'Visite surprise', "Recevoir la visite de la Capri d'un ami"],
-    ['legend', 'Légende de Night City', 'Atteindre le niveau 10 de Street Cred']
+    ['legend', 'Légende de Night City', 'Atteindre le niveau 10 de Street Cred'],
+    ['friend', 'Choom pour la vie', 'Devenir ami avec un autre utilisateur de Capri'],
+    ['map', 'Netwatch', 'Ouvrir la carte des amis'],
+    ['netrun', 'Intrusion', 'Percer l\'ICE d\'un ami'],
+    ['netrun8', 'Briseur de glace', 'Percer un ICE de niveau 8 ou plus'],
+    ['wall', 'Mur noir', 'Bloquer une tentative de piratage d\'un ami'],
+    ['ice5', 'Pare-feu solide', 'Monter ton ICE au niveau 5'],
+    ['ice10', 'Black ICE', 'Monter ton ICE au niveau 10']
   ];
 
   C.HELP = [
@@ -182,6 +189,10 @@ var C = window.C || (window.C = {});
     ['mode fête', 'Néons partout, Capri danse au rythme (« stop la fête »)'],
     ["ma ville c'est Paris", 'Météo en direct (puis « météo »)'],
     ['fais pleuvoir', 'Pluie de néons (aussi : fais neiger, orage)'],
+    ['ami AMI-XXXX-XXXX', 'Demande d\'ami (« mes amis », « accepte Léo », « refuse »)'],
+    ['carte', 'Carte du monde de tes amis (ville seulement, si ils l\'ont choisi)'],
+    ['pirate Léo', 'Netrun contre l\'ICE d\'un ami : breach plus dur (amis seulement)'],
+    ['renforce l\'ICE', 'Mini-jeu pare-feu pour monter ton ICE (« mon ice »)'],
     ['jeu', 'Mini-jeu de hacking'],
     ['breach', 'Breach Protocol (aussi quand tu reviens après une absence)'],
     ['combat', 'Appelle Vex, la rivale'],

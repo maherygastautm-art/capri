@@ -368,21 +368,30 @@ var C = window.C || (window.C = {});
       var body = 'V1:' + JSON.stringify({ from: data.userName || 'Un choom', skin: cred.skin().id, msg: msg || '', back: friends.myCode() });
       return friendTopic(clean(code)).then(function (t) { return fetch(RELAY + t, { method: 'POST', body: body }); }).then(function (r) { return r.ok; }).catch(function () { return false; });
     },
+    topicOf: friendTopic,
+    clean: clean,
+    post: function (code, body) {
+      return friendTopic(clean(code)).then(function (t) { return fetch(RELAY + t, { method: 'POST', body: body }); }).then(function (r) { return r.ok; }).catch(function () { return false; });
+    },
+    // boîte de réception du code ami : visites (V1) et messages d'amis (F1)
     poll: function () {
-      if (!data.cfg.visits || document.hidden) return;
+      if (document.hidden) return;
       var since = data.lastVisit ? data.lastVisit + 1 : Math.floor(Date.now() / 1000) - 3600;
       friendTopic(friends.myCode()).then(function (t) { return fetch(RELAY + t + '/json?poll=1&since=' + since, { cache: 'no-store' }); }).then(function (r) { return r.text(); }).then(function (txt) {
-        var last = data.lastVisit || 0;
+        var last = data.lastVisit || 0, social = [];
         txt.split('\n').forEach(function (l) {
           if (!l.trim()) return;
           try {
-            var m = JSON.parse(l);
-            if (!m.message || m.message.indexOf('V1:') !== 0 || m.time <= (data.lastVisit || 0)) return;
+            var m = JSON.parse(l), visit = m.message && m.message.indexOf('V1:') === 0;
+            if (!m.message || (!visit && m.message.indexOf('F1:') !== 0) || m.time <= (data.lastVisit || 0)) return;
             last = Math.max(last, m.time);
-            visitQueue.push(JSON.parse(m.message.slice(3)));
+            var body = JSON.parse(m.message.slice(3));
+            if (!visit) social.push(body);
+            else if (data.cfg.visits !== false) visitQueue.push(body);
           } catch (e) { }
         });
         if (last !== (data.lastVisit || 0)) { data.lastVisit = last; C.save(); }
+        social.forEach(function (b) { if (C.buddies) C.buddies.handle(b); });
         showVisit();
       }).catch(function () { });
     }
@@ -542,6 +551,7 @@ var C = window.C || (window.C = {});
       });
       return true;
     }
+    if (C.trySocial && C.trySocial(n, t, reply, ask)) return true;
     if (/^(ecoute moi|micro|active le micro|ecoute)$/.test(n)) { C.startMic(); return true; }
     return false;
   };
@@ -576,14 +586,13 @@ var C = window.C || (window.C = {});
       data.skin = open[(i + 1) % open.length].id;
     });
     row('Niveau', 'NIVEAU ' + cred.level() + ' — ' + cred.title().toUpperCase() + ' (' + (data.cred || 0) + ' XP)');
-    box.appendChild(el('div', 'section', 'Synchro et amis'));
+    box.appendChild(el('div', 'section', 'Synchro'));
     toggle('Synchro PC ↔ iPhone', function () { return !!data.syncOn; }, function (v) {
       if (v) sync.start(null).then(function (r) { C.sys('code de synchro : ' + r.code + ' — sur le PC, tape « synchro ' + r.code + ' ».'); });
       else sync.stop();
     });
     row('Code de synchro', data.syncOn && data.syncCode ? data.syncCode : '—');
-    toggle("Visites d'amis", function () { return data.cfg.visits !== false; }, function (v) { data.cfg.visits = v; });
-    row('Mon code ami', friends.myCode());
+    if (C.socialSettings) C.socialSettings(box, row, toggle);
   };
 
   // synchro et visites en arrière-plan
@@ -597,6 +606,7 @@ var C = window.C || (window.C = {});
       friends.poll();
     }, 60000);
     setTimeout(friends.poll, 5000);
+    setTimeout(function () { if (C.buddies) C.buddies.broadcast(false); }, 8000);
     document.addEventListener('visibilitychange', function () { if (!document.hidden && data.syncOn) sync.pull(true); });
   };
 })();
