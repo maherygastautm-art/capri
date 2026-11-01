@@ -483,6 +483,7 @@ var C = window.C || (window.C = {});
     }
     function open(tall) {
       if (game.playing) game.abort();
+      input.blur();   // ferme le clavier : il cacherait la grille et ferait bouger le panneau pendant la partie
       ui.openPanel();
       $('panel').classList.toggle('tall', !!tall);   // netrun et pare-feu : panneau agrandi
       selectTab(0);
@@ -492,6 +493,7 @@ var C = window.C || (window.C = {});
     }
     // ice = 0 : partie normale ; 1 à 10 : piratage de l'ICE d'un ami (done(res, secondes) remplace les récompenses)
     game.start = function (ice, target, done) {
+      if (game.playing) game.abort();   // l'ancienne partie se termine avec SON callback, avant qu'on le remplace
       ICE = ice || 0;
       onDone = done || null;
       if (!ICE) { N = 5; LEN = 4; BUF = 6; LIMIT = 25; CODES = ALL.slice(0, 6); }
@@ -504,7 +506,8 @@ var C = window.C || (window.C = {});
       }
       open(!!ICE);
       // contre un ami : grille au-dessus, séquence et buffer dessous, le tout doit tenir dans la hauteur du panneau
-      var room = Math.min(box.clientWidth || 330, 420) - 14, high = (box.clientHeight || 360) - 200;
+      // le clavier est peut-être encore en train de se fermer : on mesure la hauteur sans lui (innerHeight ne bouge pas sur iPhone)
+      var room = Math.min(box.clientWidth || 330, 420) - 14, high = Math.max(box.clientHeight || 360, innerHeight - 250) - 200;
       CH = ICE ? Math.max(22, Math.min(37, Math.floor(high / N))) : 32;
       CW = ICE ? Math.min(44, Math.floor(room / N), Math.round(CH * 1.3)) : 38;
       box.innerHTML = '<div class="g-head"><div><div class="g-title' + (ICE ? ' net' : '') + '"></div><div class="g-help"></div></div>' +
@@ -567,6 +570,7 @@ var C = window.C || (window.C = {});
 
     // pare-feu : cliquer les paquets avant qu'ils touchent le noyau ; réussi = done(1)
     game.firewall = function (level, done) {
+      if (game.playing) game.abort();
       level = Math.max(1, Math.min(10, level));
       onDone = done;
       open(true);

@@ -5,7 +5,7 @@ var C = window.C || (window.C = {});
 
 (function () {
   var data = C.data, COOLDOWN = 10 * 60, WEEK = 7 * 24 * 3600;
-  var pending = null, pendingTimer = 0, duelActive = false;
+  var pending = null, pendingTimer = 0, duelActive = false, friendsOpen = false, decided = {};   // decided : code -> heure du verdict
   ['buddies', 'requests', 'asked'].forEach(function (k) { if (!Array.isArray(data[k])) data[k] = []; });
   if (!data.ice) data.ice = 1;
   if (data.hackable === undefined) data.hackable = true;
@@ -143,16 +143,21 @@ var C = window.C || (window.C = {});
     waitMinutes: function (b) { var w = (b.lastHack || 0) + COOLDOWN - now(); return w <= 0 ? 0 : Math.ceil(w / 60); },
     duelActive: function () { return duelActive || (C.intrusion && C.intrusion.active()); },
     windowFor: function () { return 30; },   // même durée que le breach (app.js)
-    // j'attaque : l'ami reçoit l'écran d'intrusion (dur = ma fenêtre)
-    attack: function (b) { var m = me('atk'); m.dur = buddies.windowFor(ice(b)); post(b.code, m); },
+    // j'attaque : l'ami reçoit l'écran d'intrusion (dur = ma fenêtre). Pendant ma partie, je guette son contre-piratage.
+    attack: function (b) {
+      var m = me('atk'); m.dur = buddies.windowFor(ice(b)); post(b.code, m);
+      b.lastHack = now(); C.save();
+      pending = { b: b, playing: true };
+      duelActive = true;
+      clearTimeout(pendingTimer);
+    },
     // fin de mon breach : j'envoie ma performance puis j'attends le verdict de l'ami
+    // (renvoie false si le duel est déjà fini : l'ami a contre-piraté avant moi)
     attackResult: function (b, win, seconds) {
-      b.lastHack = now();
-      C.save();
+      if (!pending || pending.b !== b || !pending.playing) return false;
+      pending.playing = false; pending.win = win;
       var m = me(win ? 'strike' : 'miss'); if (win) m.tm = Math.round(seconds * 100) / 100;
       post(b.code, m);
-      pending = { b: b, win: win };
-      duelActive = true;
       clearTimeout(pendingTimer);
       pendingTimer = setTimeout(function () {   // pas de verdict (ami hors ligne) : on garde notre résultat
         if (!pending) return;
@@ -160,6 +165,7 @@ var C = window.C || (window.C = {});
         if (p.win) { buddies.win(p.b); C.reply(C.line('hack.win', 'On est dedans ! L\'ICE de {0} a cédé.', name(p.b))); }
         else C.reply(C.line('hack.fail', 'Tracée... l\'ICE de {0} nous a éjectées.', name(p.b)));
       }, win ? 40000 : 30000);
+      return true;
     },
     win: function (b) {
       data.hacksWon = (data.hacksWon || 0) + 1;
@@ -171,6 +177,7 @@ var C = window.C || (window.C = {});
     },
     // côté défenseur : applique le verdict chez moi et l'envoie à l'attaquant
     resolveDefense: function (code, defHacked, atkHacked) {
+      decided[code] = now();
       var b = byCode(code);
       if (defHacked) data.ice = Math.max(1, data.ice - 1);
       else if (atkHacked && b) buddies.win(b);
@@ -207,6 +214,7 @@ var C = window.C || (window.C = {});
         }
       } else if (m.t === 'atk') {
         if (!known || data.hackable === false || C.intrusion.active()) return;
+        delete decided[code];   // nouveau duel
         upsert(m);
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
         C.alert('ALERTE INTRUSION', C.line('hack.incoming', 'Alerte ! {0} est en train d\'attaquer ton ICE (niveau {1}) !', who, data.ice));
@@ -214,6 +222,7 @@ var C = window.C || (window.C = {});
         C.intrusion.show(known, Math.max(8, Math.min(40, dur)));
       } else if (m.t === 'strike' || m.t === 'miss') {
         if (!known) return;
+        if (decided[code] && now() - decided[code] < 180) return;   // duel déjà tranché : résultat en retard, ignoré
         var w2 = m.t === 'strike', tm = parseFloat(m.tm); if (!(tm > 0)) tm = 999;
         if (C.intrusion.active() && C.intrusion.code() === code) C.intrusion.attacker(w2, tm);
         else if (data.hackable !== false) passiveDefense(code, who, w2);
@@ -221,6 +230,7 @@ var C = window.C || (window.C = {});
         if (!pending || clean(pending.b.code) !== code) return;
         clearTimeout(pendingTimer);
         var p = pending; pending = null; duelActive = false;
+        if (p.playing && C.game.playing) { C.game.abort(); C.sys('connexion coupée par ' + who + '.'); }   // il a fini avant moi : ma partie s'arrête net
         if (m.atkHacked) {
           data.ice = Math.max(1, data.ice - 1); C.save();
           var cl = C.line('hack.countered', 'Contre-piratage ! {0} a été plus rapide et a percé ton ICE (niveau {1}).', who, data.ice);
@@ -265,8 +275,8 @@ var C = window.C || (window.C = {});
     C.sys('connexion à l\'ICE de ' + name(b) + ' (niveau ' + ice(b) + ')...');
     buddies.attack(b);   // l'ami reçoit l'écran d'intrusion
     C.game.start(ice(b), name(b), function (res, sec) {
-      // le verdict final vient de l'ami (il peut contre-pirater : le plus rapide gagne)
-      buddies.attackResult(b, res > 0, sec || 0);
+      // le verdict final vient de l'ami (il peut contre-pirater : le premier qui finit pirate l'autre)
+      if (!buddies.attackResult(b, res > 0, sec || 0)) return;
       C.sys(res > 0 ? 'séquence injectée en ' + (sec || 0).toFixed(1) + ' s — en attente de ' + name(b) + '...' : (res === 0 ? 'netrun abandonné — en attente de ' + name(b) + '...' : 'breach raté — en attente de ' + name(b) + '...'));
     });
   };
@@ -281,13 +291,20 @@ var C = window.C || (window.C = {});
 
   // ---------- écran d'intrusion : barre de chargement + « rien faire » / « contre-piratage » (course) ----------
   C.intrusion = (function () {
-    var box = null, bud, bcode, dur, choice, t0, raf, resolved;
-    var counterDone, counterWon, counterTime, atkDone, atkWon, atkTime;
+    var box = null, bud, bcode, dur, choice, t0, raf, resolved = true, lost = 0;
+    var counterDone, counterWon, atkDone, atkWon;
     function elc(tag, cls, html) { var d = document.createElement(tag); if (cls) d.className = cls; if (html != null) d.innerHTML = html; return d; }
     function show(b, d) {
       if (box) return;
       bud = b; bcode = clean(b.code); dur = d; choice = 0; resolved = false;
       counterDone = atkDone = false; t0 = performance.now();
+      // l'attaquant ne donne plus de nouvelles (appli fermée, réseau coupé) : on ne reste pas bloqué
+      clearTimeout(lost);
+      lost = setTimeout(function () {
+        if (resolved) return;
+        if (C.game.playing && choice === 2) { resolved = true; C.game.abort(); resolved = false; }
+        finish(false, false);
+      }, (dur + 25) * 1000);
       box = elc('div', 'intru', '<div class="in-card"><div class="in-t">⚠ INTRUSION DÉTECTÉE</div>' +
         '<div class="in-s"></div><div class="in-bar"><i></i><b>INTRUSION 0 %</b></div><div class="in-sub">Il force ton pare-feu. Réagis vite.</div>' +
         '<div class="in-btns"><button class="btn">RIEN FAIRE</button><button class="btn cnt">CONTRE-PIRATAGE</button></div></div>');
@@ -318,30 +335,40 @@ var C = window.C || (window.C = {});
     function chooseCounter() {
       if (choice) return;
       choice = 2;
-      remove();   // on bascule sur le breach (le plus rapide pirate l'autre)
+      remove();   // on bascule sur le breach : le premier qui finit pirate l'autre
       C.ui.openPanel();
-      C.game.start(ice(bud), name(bud), function (res, sec) {
-        counterDone = true; counterWon = res > 0; counterTime = sec || 0;
-        C.sys('breach terminé — calcul du vainqueur...');
-        resolve();
+      C.game.start(ice(bud), name(bud), function (res) {
+        if (resolved) return;   // l'attaquant a fini avant : partie déjà coupée
+        counterDone = true; counterWon = res > 0;
+        if (counterWon) finish(false, true);                 // j'ai fini en premier : je le pirate
+        else if (atkDone) finish(atkWon, false);             // raté, et il avait déjà échoué / réussi
+        else C.sys('contre-piratage raté — l\'attaque continue...');   // raté : on attend la fin de son breach
       });
     }
-    function attacker(win, t) { atkDone = true; atkWon = win; atkTime = t; resolve(); }
-    function resolve() {
+    // résultat du breach de l'attaquant (arrive par le relais)
+    function attacker(win) {
       if (resolved) return;
-      var defHacked, atkHacked = false;
-      if (choice === 1) { if (!atkDone) return; defHacked = atkWon; }
-      else {
-        if (!counterDone) return;
-        if (!counterWon) defHacked = true;
-        else { if (!atkDone) return; atkHacked = !atkWon || counterTime <= atkTime; defHacked = !atkHacked; }
+      atkDone = true; atkWon = win;
+      if (choice === 2 && !counterDone) {
+        if (!win) return;                                     // il a raté : je peux encore le contre-pirater
+        resolved = true; C.game.abort(); resolved = false;   // coupe ma partie sans déclencher son résultat
+        C.sys(name(bud) + ' a fini avant toi : connexion coupée.');
+        finish(true, false);                                  // il a fini en premier : il me pirate
+        return;
       }
+      if (choice === 0) choice = 1;                           // pas encore choisi : comme « rien faire »
+      finish(win, false);
+    }
+    function resolve() { if (!resolved && choice === 1 && atkDone) finish(atkWon, false); }
+    function finish(defHacked, atkHacked) {
+      if (resolved) return;
       resolved = true; duelActive = false;
+      clearTimeout(lost);
       remove();
       buddies.resolveDefense(bcode, defHacked, atkHacked);
       if (defHacked) {
-        var lost = C.line(choice === 2 ? 'hack.lost.race' : 'hack.lost', '{0} a percé ton ICE. Il est tombé au niveau {1}. Dis « renforce l\'ICE » pour le remonter.', name(bud), data.ice);
-        C.ui.closePanel(); C.hackedText(function () { C.alert('VOUS AVEZ ÉTÉ PIRATÉ', lost); });
+        var msg = C.line(choice === 2 ? 'hack.lost.race' : 'hack.lost', '{0} a percé ton ICE. Il est tombé au niveau {1}. Dis « renforce l\'ICE » pour le remonter.', name(bud), data.ice);
+        C.ui.closePanel(); C.hackedText(function () { C.alert('VOUS AVEZ ÉTÉ PIRATÉ', msg); });
       } else if (atkHacked) { C.alert('CONTRE-PIRATAGE RÉUSSI', 'Tu as été plus rapide : l\'ICE de ' + name(bud) + ' a cédé. +Street Cred.'); C.stage.dance(); }
       else C.alert('ATTAQUE BLOQUÉE', name(bud) + ' s\'est fait tracer. Ton ICE a tenu.');
     }
@@ -540,7 +567,40 @@ var C = window.C || (window.C = {});
   C.socialSettings = function (box, row, toggle) {
     box.appendChild(el('div', 'section', 'Amis et carte du monde'));
     C.copyRow(box, 'Mon code ami', function () { return C.friends.myCode(); });
-    row('Amis', data.buddies.length + ' AMI(S)' + (data.requests.length ? ' · ' + data.requests.length + ' DEMANDE(S)' : ''));
+    // « Amis » : un toucher déplie la liste
+    var ar = el('div', 'row', '<div class="lb">Amis</div><div class="rt"></div>');
+    var list = el('div', 'flist');
+    function fill() {
+      ar.querySelector('.rt').textContent = data.buddies.length + ' AMI(S)' + (data.requests.length ? ' · ' + data.requests.length + ' DEMANDE(S)' : '') + (friendsOpen ? '  ▾' : '  ›');
+      ar.querySelector('.rt').style.color = 'var(--cyan)';
+      list.innerHTML = '';
+      list.style.display = friendsOpen ? '' : 'none';
+      if (!friendsOpen) return;
+      if (!data.buddies.length) list.appendChild(el('div', 'fl-empty', 'Aucun ami pour l\'instant. Donne ton code ami, ou tape « ami AMI-XXXX-XXXX ».'));
+      data.buddies.forEach(function (b) {
+        var it = el('div', 'fl-item', '<div class="fl-n"></div><div class="fl-i"></div><div class="fl-a"></div>');
+        it.querySelector('.fl-n').textContent = name(b).toUpperCase();
+        it.querySelector('.fl-i').textContent = 'LVL ' + (b.lvl || 1) + ' · ICE ' + ice(b) + ' · ' + (hasPlace(b) ? b.city : 'position masquée') + (canHack(b) ? '' : ' · piratage coupé');
+        [['PIRATER', function () { C.netrun(b); }],
+         ['VISITE', function () { C.friends.send(b.code, '').then(function (ok) { C.reply(ok ? 'Ma Capri file chez ' + name(b) + '.' : 'Le relais ne répond pas.'); }); }],
+         ['RETIRER', function () { if (confirm('Retirer ' + name(b) + ' de tes amis ?')) { buddies.remove(b); fill(); } }]].forEach(function (a) {
+          var x = el('button', 'btn', a[0]); x.addEventListener('click', function (e) { e.stopPropagation(); a[1](); }); it.querySelector('.fl-a').appendChild(x);
+        });
+        list.appendChild(it);
+      });
+      data.requests.forEach(function (r) {
+        var it = el('div', 'fl-item req', '<div class="fl-n"></div><div class="fl-a"></div>');
+        it.querySelector('.fl-n').textContent = 'DEMANDE : ' + name(r).toUpperCase();
+        var y = el('button', 'btn', 'ACCEPTER'); y.addEventListener('click', function (e) { e.stopPropagation(); buddies.accept(r); fill(); });
+        var n = el('button', 'btn', 'REFUSER'); n.addEventListener('click', function (e) { e.stopPropagation(); buddies.refuse(r); fill(); });
+        it.querySelector('.fl-a').appendChild(y); it.querySelector('.fl-a').appendChild(n);
+        list.appendChild(it);
+      });
+    }
+    ar.addEventListener('click', function () { friendsOpen = !friendsOpen; fill(); });
+    fill();
+    box.appendChild(ar);
+    box.appendChild(list);
     toggle('Apparaître sur la carte (ville seulement)', function () { return !!data.onMap; }, function (v) { data.onMap = v; buddies.broadcast(true); });
     toggle("Visites d'amis", function () { return data.cfg.visits !== false; }, function (v) { data.cfg.visits = v; });
     box.appendChild(el('div', 'section', 'Piratages entre amis'));
