@@ -144,7 +144,43 @@ var C = window.C || (window.C = {});
   }
 
   // ---------- crinière ----------
+  // Crinière dessinée (img/hair.png, 190 x 154 unités) : la tête de Capri est au point (99.75, 88.97) de l'image
+  var HAIR = { w: 190, h: 154, x: 99.75, y: 88.97 }, hairImg = new Image(), hairTinted = {};
+  hairImg.src = 'img/hair.png';
+  // silhouette de la crinière dans une seule couleur (fantômes, Vex)
+  function hairOf(color) {
+    if (!color) return hairImg;
+    if (!hairTinted[color]) {
+      var c = document.createElement('canvas');
+      c.width = hairImg.naturalWidth; c.height = hairImg.naturalHeight;
+      var x = c.getContext('2d');
+      x.drawImage(hairImg, 0, 0);
+      x.globalCompositeOperation = 'source-atop';
+      x.fillStyle = color; x.fillRect(0, 0, c.width, c.height);
+      hairTinted[color] = c;
+    }
+    return hairTinted[color];
+  }
+  // la crinière suit la tête, ondule un peu et part vers l'arrière pendant le sprint
   function hair(d, p) {
+    if (!hairImg.complete || !hairImg.naturalWidth) { hairShards(d, p); return; }
+    var flow = norm(p.ScarfDir), a0 = -p.Tilt * Math.PI / 180;
+    flow = P(flow.x * Math.cos(a0) - flow.y * Math.sin(a0), flow.x * Math.sin(a0) + flow.y * Math.cos(a0));
+    var drift = (p.ScarfStretch - 1) * 14, img = hairOf(d.tint || (d.pal && d.pal.Red));
+    atHead(d, p, function () {
+      var c = d.ctx;
+      c.save();
+      c.translate(flow.x * drift, flow.y * drift);
+      // en plus de suivre la tête, elle accentue son inclinaison et se balance doucement
+      c.rotate((Math.sin(p.ScarfPhase * 0.6) * 3 + p.Tilt * 0.35) * Math.PI / 180);
+      c.scale(1 + (p.ScarfStretch - 1) * 0.12, 1);
+      c.drawImage(img, -HAIR.x, -HAIR.y, HAIR.w, HAIR.h);
+      c.restore();
+    });
+  }
+
+  // ancienne crinière en éclats (affichée seulement le temps que l'image se charge)
+  function hairShards(d, p) {
     var flow = norm(p.ScarfDir), a0 = -p.Tilt * Math.PI / 180;
     flow = P(flow.x * Math.cos(a0) - flow.y * Math.sin(a0), flow.x * Math.sin(a0) + flow.y * Math.cos(a0));
     var stretch = 3 + (p.ScarfStretch - 1) * 20, o = P(-2, -20);
@@ -205,9 +241,19 @@ var C = window.C || (window.C = {});
         for (var k = 0; k <= 24; k++) { var a = k * 0.6 + i * 3, r = 0.2 + k * 0.19; sp.push(x + Math.cos(a) * r, y + Math.sin(a) * r); }
         line(d, G, 0.9, sp);
       } else {
-        var big = face === 3 ? 1.15 : 1;
-        disc(d, B, x, y, 5.8 * big); disc(d, null, x, y, 4.9 * big, G, 1.3); disc(d, B, x, y, 3.5 * big);
-        disc(d, COL.Blue, x, y, 2.7 * big); disc(d, null, x, y, 2.7 * big, B, 0.5); disc(d, COL.White, x + 0.2, y - 0.2, face === 3 ? 0.8 : 1.15);
+        // yeux de chat : amande noire pointue des deux côtés, trait qui remonte au coin extérieur,
+        // fin anneau vert, anneau noir, iris bleu foncé puis bleu clair, pupille grise
+        var k = (face === 3 ? 1.15 : 1) * 0.85, s = x < 0 ? -1 : 1, c = d.ctx;
+        var X = function (u) { return x + u * k; }, Y = function (v) { return y + v * k; };
+        c.beginPath();
+        c.moveTo(X(-s * 7.6), Y(0.3));
+        c.quadraticCurveTo(X(-s * 0.5), Y(-10), X(s * 7.8), Y(-1));
+        c.quadraticCurveTo(X(s * 1), Y(9.5), X(-s * 7.6), Y(0.3));
+        c.fillStyle = B; c.fill();
+        poly(d, B, [P(X(s * 3), Y(-5)), P(X(s * 10.5), Y(-6.5)), P(X(s * 7), Y(-2.5))]);
+        disc(d, G, x, y, 4.4 * k); disc(d, B, x, y, 3.85 * k);
+        disc(d, '#24479E', x, y, 3.2 * k); disc(d, '#3A6FD8', x, y, 2.4 * k);
+        disc(d, '#C9CBD6', x, y, (face === 3 ? 1.0 : 1.35) * k);
       }
     }
   }

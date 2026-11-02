@@ -94,23 +94,58 @@ var C = window.C || (window.C = {});
     });
   };
 
-  // ---------- apparition buggée (gros plan + clin d'œil) ----------
-  var IN = 0.55, WINK0 = 1.45, WINK1 = 1.95, OUT = 2.75, TOTAL = 3.3;
-  var portraits = null;
-  function renderPortrait(wink, tint) {
-    var px = 800, c = document.createElement('canvas');
-    c.width = c.height = px;
-    var ctx = c.getContext('2d');
-    ctx.scale(px / 400, px / 400);
-    C.drawPortrait(ctx, wink, tint);
+  // ---------- apparition buggée (plein écran : bras tendus, coucou, puis disparition en bug) ----------
+  var IN = 0.55, WAVE0 = 1.5, OUT = 3.0, TOTAL = 3.6;
+  var NAMES = ['intro-grab', 'intro-smear', 'intro-wave1', 'intro-wave2', 'intro-wave3'];
+  var frames = null;
+  // image de la séquence à l'instant t : bras tendus, élan du bras, puis coucou en boucle (8 images/s)
+  function frameAt(t) {
+    if (t < WAVE0) return 0;
+    if (t < WAVE0 + 0.12) return 1;
+    return [2, 3, 4, 3][Math.floor((t - WAVE0 - 0.12) * 8) % 4];
+  }
+  // silhouette de l'image remplie d'une seule couleur (fantômes du décalage RVB)
+  function tinted(img, col) {
+    var c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    var x = c.getContext('2d');
+    x.drawImage(img, 0, 0);
+    x.globalCompositeOperation = 'source-atop';
+    x.fillStyle = col; x.fillRect(0, 0, c.width, c.height);
     return c;
+  }
+  function loadFrames(ready) {
+    var left = NAMES.length, f = { main: [], ga: [], gb: [] };
+    NAMES.forEach(function (n, i) {
+      var im = new Image();
+      im.onload = function () {
+        f.main[i] = im; f.ga[i] = tinted(im, '#3CF06E'); f.gb[i] = tinted(im, '#5EF6FF');
+        if (--left === 0) { frames = f; ready(); }
+      };
+      im.onerror = function () { if (--left === 0) ready(); };
+      im.src = 'img/' + n + '.png';
+    });
+  }
+  // haut des images réservé à la crinière (pixels) : le corps occupe les 720 px du bas, en 16:9
+  var HAIR_TOP = 480;
+  // le corps remplit tout l'écran sur un écran large ; sur un écran plus carré ou un téléphone en hauteur,
+  // on ne le grossit pas au point de couper la main qui fait coucou. La crinière déborde au-dessus.
+  function fit(W, H, iw, ih) {
+    var bh = ih - HAIR_TOP, k = W >= H ? Math.max(W / iw, Math.min(H / bh, W * 1.25 / iw)) : W * 1.35 / iw;
+    return { w: iw * k, h: ih * k, y: (H - bh * k) / 2 - HAIR_TOP * k };
   }
   C.glitchPlaying = false;
   C.glitch = function (caption, done) {
     if (C.glitchPlaying) return;
     C.glitchPlaying = true;
-    if (!portraits) portraits = { open: renderPortrait(false), wink: renderPortrait(true), ga: renderPortrait(false, '#3CF06E'), gb: renderPortrait(false, '#5EF6FF') };
-    var f = fullCanvas(90), ctx = f.ctx, W = f.w, H = f.h, size = Math.min(H * 0.8, W * 0.95);
+    if (!frames) {
+      loadFrames(function () {
+        C.glitchPlaying = false;
+        if (frames) C.glitch(caption, done); else if (done) done();
+      });
+      return;
+    }
+    var f = fullCanvas(90), ctx = f.ctx, W = f.w, H = f.h, size = fit(W, H, frames.main[0].width, frames.main[0].height);
     C.stage.hidden = true;
     var scan = ctx.createPattern((function () { var p = document.createElement('canvas'); p.width = 4; p.height = 4; var x = p.getContext('2d'); x.fillStyle = 'rgba(0,0,0,1)'; x.fillRect(0, 0, 4, 1.5); return p; })(), 'repeat');
     loop(function (t) {
@@ -118,48 +153,52 @@ var C = window.C || (window.C = {});
       if (t >= TOTAL) { f.c.remove(); C.glitchPlaying = false; C.stage.hidden = false; if (done) done(); return true; }
       var calm = t >= IN && t < OUT;
       var heavy = t < IN ? 1 - t / IN * 0.6 : calm ? 0 : 0.4 + 0.6 * (t - OUT) / (TOTAL - OUT);
-      var z = calm ? 0.94 + 0.06 * (t - IN) / (OUT - IN) : 0.94, s = size * z;
-      var x = (W - s) / 2, y = (H - s) / 2;
-      var src = t >= WINK0 && t < WINK1 ? portraits.wink : portraits.open;
-      ctx.fillStyle = 'rgba(0,0,0,' + (calm ? 0.3 : Math.random() * 0.5) + ')';
-      ctx.fillRect(0, 0, W, H);
+      var z = calm ? 1 + 0.04 * (t - IN) / (OUT - IN) : 1, sw = size.w * z, sh = size.h * z;
+      var x = (W - sw) / 2, y = H / 2 - (H / 2 - size.y) * z;
+      var k = frameAt(t), src = frames.main[k], ga = frames.ga[k], gb = frames.gb[k];
+      // fond transparent : on voit l'appli derrière Capri ; seulement des clignotements sombres pendant le bug
+      if (!calm) { ctx.fillStyle = 'rgba(0,0,0,' + Math.random() * 0.5 + ')'; ctx.fillRect(0, 0, W, H); }
       function slices(count, off) {
         for (var i = 0; i < count; i++) {
-          var top = Math.random() * s, h = 4 + Math.random() * s * 0.08;
-          var img = Math.random() < 0.25 ? (Math.random() < 0.5 ? portraits.ga : portraits.gb) : src;
-          var sy = top / s * img.height, sh = h / s * img.height;
-          ctx.drawImage(img, 0, sy, img.width, sh, x + (Math.random() - 0.5) * 2 * off, y + top, s, h);
+          var top = Math.random() * sh, h = 4 + Math.random() * sh * 0.08;
+          var img = Math.random() < 0.25 ? (Math.random() < 0.5 ? ga : gb) : src;
+          var sy = top / sh * img.height, shh = h / sh * img.height;
+          ctx.drawImage(img, 0, sy, img.width, shh, x + (Math.random() - 0.5) * 2 * off, y + top, sw, h);
         }
       }
       if (calm) {
         if (Math.random() < 0.12) {
           ctx.globalAlpha = 0.7;
-          ctx.drawImage(portraits.ga, x - 6 - Math.random() * 8, y, s, s);
-          ctx.drawImage(portraits.gb, x + 6 + Math.random() * 8, y, s, s);
+          ctx.drawImage(ga, x - 6 - Math.random() * 8, y, sw, sh);
+          ctx.drawImage(gb, x + 6 + Math.random() * 8, y, sw, sh);
           ctx.globalAlpha = 1;
         }
-        ctx.drawImage(src, x, y, s, s);
+        ctx.drawImage(src, x, y, sw, sh);
         if (Math.random() < 0.1) slices(1 + Math.floor(Math.random() * 2), 30);
         if (Math.random() > 0.08) {
           ctx.fillStyle = '#FF5E57';
           ctx.font = '14px "Share Tech Mono", monospace';
-          ctx.fillText(caption || '> capri.exe  //  SIGNAL HIJACKED', x + s * 0.08, y + s * 0.95);
+          ctx.fillText(caption || '> capri.exe  //  SIGNAL HIJACKED', W * 0.05, H * 0.93);
         }
       } else {
         var off = 20 + heavy * 120;
         ctx.globalAlpha = 0.7;
-        ctx.drawImage(portraits.ga, x - off * 0.3 * Math.random() - 4, y + (Math.random() - 0.5) * 8, s, s);
-        ctx.drawImage(portraits.gb, x + off * 0.3 * Math.random() + 4, y + (Math.random() - 0.5) * 8, s, s);
+        ctx.drawImage(ga, x - off * 0.3 * Math.random() - 4, y + (Math.random() - 0.5) * 8, sw, sh);
+        ctx.drawImage(gb, x + off * 0.3 * Math.random() + 4, y + (Math.random() - 0.5) * 8, sw, sh);
         ctx.globalAlpha = 1;
         if (t > TOTAL - 0.2) {
+          // fin : écrasement cathodique de l'image
           var u = (t - (TOTAL - 0.2)) / 0.2;
+          ctx.clearRect(0, 0, W, H);
+          ctx.fillStyle = 'rgba(0,0,0,' + 0.5 * (1 - u) + ')';
+          ctx.fillRect(0, 0, W, H);
           ctx.save();
-          ctx.translate(x + s / 2, y + s / 2);
+          ctx.translate(W / 2, H / 2);
           ctx.scale(1 + u * 0.2, Math.max(0.02, 1 - u));
-          ctx.drawImage(src, -s / 2, -s / 2, s, s);
+          ctx.drawImage(src, -sw / 2, -sh / 2, sw, sh);
           ctx.restore();
         } else {
-          if (Math.random() < 1 - heavy * 0.6) ctx.drawImage(src, x + (Math.random() - 0.5) * heavy * 30, y, s, s);
+          if (Math.random() < 1 - heavy * 0.6) ctx.drawImage(src, x + (Math.random() - 0.5) * heavy * 30, y, sw, sh);
           slices(5 + Math.floor(Math.random() * 9), off);
         }
         var cols = ['#FF5E57', '#3CF06E', '#FFFFFF', '#000000', '#7B2CF0'];

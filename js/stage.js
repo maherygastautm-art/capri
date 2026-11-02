@@ -70,6 +70,7 @@ var C = window.C || (window.C = {});
   function setMode(m, dur) {
     if (m === 'dance' && (st.mode !== 'dance' || st.nextDance)) { st.danceAnim = st.nextDance || (C.cred ? C.cred.randomDance() : 'dance'); st.nextDance = null; }
     st.mode = m; st.modeT = 0; st.modeDur = dur || 0; st.animT = 0;
+    if (m !== 'tp') st.tpGone = false;
   }
   function land() { st.x = clampX(st.x); sparks(st.x, st.y, 12); setMode('land', 0.4); }
 
@@ -96,13 +97,13 @@ var C = window.C || (window.C = {});
     setMode('walk', 0);
   }
 
+  // elle se ramasse en regardant sa destination, un éclair vertical vert et rouge l'emporte, un second la dépose
+  var TP_STRIKE = 0.22, TP_ARRIVE = 0.5;
   function teleport(x) {
-    ghost('#FFFFFF', 0.8, 0.35);
-    var nx = clampX(x);
-    spawnBolt(st.x, st.y - 75 * S, nx, st.y - 75 * S, 0.3);
-    st.x = nx; st.y = floorY();
-    st.glitchT = 0.3;
-    land();
+    st.targetX = clampX(x);
+    st.dir = st.targetX > st.x ? 1 : -1;
+    st.tpArrived = false;
+    setMode('tp', 0);
   }
 
   function zapTo(x, y) {
@@ -130,6 +131,19 @@ var C = window.C || (window.C = {});
         if (Math.abs(dd) <= stp) st.x = st.targetX; else st.x += stp * Math.sign(dd);
         spawnBolt(ox, st.y - 75 * S, st.x, st.y - 75 * S, 0.18);
         if (st.x === st.targetX) { spawnBolt(st.dashStart, st.y - 75 * S, st.x, st.y - 75 * S, 0.35); land(); }
+        break;
+      case 'tp':
+        if (!st.tpGone && st.modeT >= TP_STRIKE) {
+          ghost('#3CF06E', 0.7, 0.3); ghost('#FF1E46', 0.7, 0.3);
+          vbolt(st.x, st.y); sparks(st.x, st.y, 10);
+          st.tpGone = true;
+        }
+        if (st.tpGone && !st.tpArrived && st.modeT >= TP_ARRIVE) {
+          st.tpArrived = true;
+          st.x = st.targetX; st.y = f;
+          vbolt(st.x, st.y); st.glitchT = 0.3;
+          land();
+        }
         break;
       case 'land': if (st.modeT > 0.4) setMode('idle', rr(1, 3)); break;
       case 'sit': case 'wave': case 'dance': case 'dizzy': case 'think':
@@ -170,7 +184,7 @@ var C = window.C || (window.C = {});
   function anim() {
     switch (st.mode) {
       case 'walk': return 'walk';
-      case 'dashprep': case 'land': return 'crouch';
+      case 'dashprep': case 'land': case 'tp': return 'crouch';
       case 'dash': return 'dash';
       case 'sit': return 'sit';
       case 'sleep': return 'sleep';
@@ -192,6 +206,8 @@ var C = window.C || (window.C = {});
     fxList.push({ k: 'ghost', p: C.pose(anim(), st.animT), tint: tint, x: st.x, y: st.y, dir: st.dir, a: alpha, life: life, age: 0 });
   }
   function spawnBolt(x1, y1, x2, y2, life) { fxList.push({ k: 'bolt', x1: x1, y1: y1, x2: x2, y2: y2, life: life, age: 0 }); }
+  // éclair vertical vert et rouge du haut de l'écran jusqu'aux pieds (x, y)
+  function vbolt(x, y) { fxList.push({ k: 'vbolt', x: x, y: y, life: 0.42, age: 0 }); }
   function sparks(x, y, n) {
     for (var i = 0; i < n; i++) {
       var a = Math.PI + rnd() * Math.PI, sp = rr(150, 450) * S;
@@ -236,6 +252,17 @@ var C = window.C || (window.C = {});
           ctx.strokeStyle = s[0]; ctx.lineWidth = s[1];
           ctx.beginPath(); pts.forEach(function (p, j) { if (j) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }); ctx.stroke();
         });
+        ctx.globalAlpha = 1;
+      } else if (f.k === 'vbolt') {
+        var vk = f.age < 0.28 ? 1 : 1 - (f.age - 0.28) / (f.life - 0.28), vp = [[f.x, 0]];
+        for (var vy = 18; vy < f.y; vy += 14 + rnd() * 22) vp.push([f.x + (rnd() - 0.5) * 46 * S, vy]);
+        vp.push([f.x, f.y]);
+        [[-3, '#3CF06E', 14, 0.25], [3, '#FF1E46', 14, 0.25], [-3, '#3CF06E', 5, 0.9], [3, '#FF1E46', 5, 0.9], [0, '#FFFFFF', 2, 1]].forEach(function (s) {
+          ctx.globalAlpha = s[3] * vk; ctx.strokeStyle = s[1]; ctx.lineWidth = s[2]; ctx.lineJoin = 'miter';
+          ctx.beginPath(); vp.forEach(function (q, j) { if (j) ctx.lineTo(q[0] + s[0], q[1]); else ctx.moveTo(q[0] + s[0], q[1]); }); ctx.stroke();
+        });
+        ctx.globalAlpha = 0.5 * vk; ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath(); ctx.ellipse(f.x, f.y, 48 * S, 7 * S, 0, 0, Math.PI * 2); ctx.fill();
         ctx.globalAlpha = 1;
       } else if (f.k === 'spark') {
         f.vy += 900 * dt; f.x += f.vx * dt; f.y += f.vy * dt;
@@ -290,7 +317,7 @@ var C = window.C || (window.C = {});
     if (C.vex) C.vex.draw(dt);
     if (C.visitor) C.visitor.draw(dt);
     var hop = st.bounceT > 0 ? Math.sin(Math.PI * st.bounceT / 0.18) * 12 : 0;
-    if (!stage.hidden) {
+    if (!stage.hidden && !st.tpGone) {
       var p = C.pose(anim(), st.animT), g = st.glitchT > 0;
       if (g) {
         drawFig(p, st.x - (3 + rnd() * 3) * S, st.y - hop, st.dir, '#3CF06E', null, 0.7);
@@ -375,6 +402,7 @@ var C = window.C || (window.C = {});
     st.sleeping = false;
     st.targetX = clampX(x);
     if (Math.abs(st.targetX - st.x) < 5) { stage.wave(); return; }
+    if (Math.abs(st.targetX - st.x) > W * 0.45) { teleport(st.targetX); return; }   // long trajet : éclair
     st.dir = st.targetX > st.x ? 1 : -1;
     setMode('dashprep', 0);
   };

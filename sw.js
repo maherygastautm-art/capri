@@ -1,7 +1,8 @@
-// Mode hors ligne : l'appli se lance même sans réseau (la radio et la météo, elles, ont besoin d'Internet)
-var CACHE = 'capri-v11';
+﻿// Mode hors ligne : l'appli se lance même sans réseau (la radio et la météo, elles, ont besoin d'Internet)
+var CACHE = 'capri-v13';
 var FILES = ['./', 'index.html', 'css/style.css', 'js/figure.js', 'js/data.js', 'js/effects.js', 'js/stage.js', 'js/brain.js', 'js/gate.js', 'js/extras.js', 'js/social.js', 'js/app.js',
-  'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+  'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
+  'img/hair.png', 'img/intro-grab.png', 'img/intro-smear.png', 'img/intro-wave1.png', 'img/intro-wave2.png', 'img/intro-wave3.png'];
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
