@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --red: #FF5E57; --red-text: #FF6B63; --red-dim: #8A3633; --red-faint: rgba(255, 94, 87, .14);
   --cyan: #5EF6FF; --yellow: #FCEE0A; --light: #EAD9D6; --bg: rgba(10, 11, 17, .94); --bar: #2B1A1C;
   --dark: #0A0B11; --off: #3A1315; --on: #0D2E33;
@@ -390,3 +390,147 @@ button.chip.on { color: var(--cyan); border-color: var(--cyan); }
 .fl-a { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .fl-a .btn { font-size: 12px; padding: 2px 10px; }
 .fl-empty { color: var(--red-text); font-size: 13px; padding: 6px 4px; }
+
+/* ---------- téléphone : bouton, MESSAGES / CONTACTS, appels ---------- */
+.telbtn { position: relative; flex: none; width: 34px; height: 30px; display: flex; align-items: center; justify-content: center; background: rgba(10, 11, 17, .7);
+  border: 1px solid var(--red); color: var(--red); padding: 0; clip-path: polygon(0 0, 100% 0, 100% 70%, 78% 100%, 0 100%); }
+.telbtn svg { width: 18px; height: 18px; fill: currentColor; }
+.telbtn:active { color: var(--cyan); border-color: var(--cyan); }
+.tel-badge { position: absolute; top: -1px; right: -1px; min-width: 15px; height: 15px; padding: 0 3px; background: var(--yellow); color: var(--dark);
+  font: 700 10px/15px var(--mono); font-style: normal; text-align: center; }
+#top { justify-content: flex-start; } #top .chips { margin-left: auto; }
+
+.tel { position: fixed; z-index: 90; left: 8px; right: 8px; top: calc(var(--safe-t) + 50px); bottom: calc(var(--safe-b) + 8px + var(--kb, 0px)); }
+.tel-frame { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--red); padding: 6px 12px 8px;
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 22px 100%, 0 calc(100% - 22px));
+  background-image: repeating-linear-gradient(0deg, rgba(255, 255, 255, .04) 0 1px, transparent 1px 3px); }
+.tel-frame::before { content: ''; position: absolute; left: 0; top: 0; width: 80px; height: 5px; background: var(--red); }
+.tel-head { display: flex; align-items: center; gap: 8px; padding: 6px 0 4px; }
+.tel-ico svg { width: 18px; height: 18px; fill: var(--red); display: block; }
+.tel-title { flex: 1; color: var(--red); font-weight: 700; letter-spacing: .1em; font-size: 15px; }
+.tel-x { color: var(--cyan); font-size: 14px; padding: 2px 9px; margin-right: 14px; }
+.tel-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--red-dim); }
+.tel-tabs button { flex: 1; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--red-text); font-size: 16px; font-weight: 600; letter-spacing: .06em; padding: 6px 4px; }
+.tel-tabs button.on { color: var(--cyan); border-bottom-color: var(--cyan); }
+.tel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 0; display: flex; flex-direction: column; gap: 4px; -webkit-overflow-scrolling: touch; }
+.tel-body.thread { overflow: hidden; padding-bottom: 0; }
+.tel-foot { font-size: 11px; color: var(--red-dim); border-top: 1px solid var(--red-faint); padding-top: 6px; text-align: center; }
+.tel-empty { color: var(--red-dim); text-align: center; padding: 26px 10px; font-size: 15px; line-height: 1.4; }
+.tel-empty b { color: var(--cyan); }
+
+.tel-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: rgba(255, 94, 87, .05); border: 1px solid transparent;
+  border-left: 3px solid var(--red-dim); color: var(--light); padding: 7px 8px; font-family: var(--font); }
+button.tel-row:active, .tel-row.unread { border-color: var(--red-faint); border-left-color: var(--cyan); background: rgba(94, 246, 255, .06); }
+.tr-main { flex: 1; min-width: 0; }
+.tr-name { font-weight: 700; font-size: 15px; letter-spacing: .04em; color: var(--red-text); }
+.tel-row.unread .tr-name { color: var(--cyan); }
+.tr-sub { font-size: 13px; color: var(--light); opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr-sub.missed { color: var(--red); opacity: 1; }
+.tr-side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.tr-time { font-size: 11px; color: var(--red-dim); }
+.tr-un { font-style: normal; background: var(--yellow); color: var(--dark); font: 700 11px/16px var(--mono); min-width: 16px; text-align: center; padding: 0 3px; }
+.tr-acts { display: flex; gap: 6px; }
+.tel-ic { width: 38px; height: 34px; display: flex; align-items: center; justify-content: center; background: transparent; border: 1px solid var(--red-dim); color: var(--cyan); padding: 0; }
+.tel-ic svg { width: 18px; height: 18px; fill: currentColor; }
+.tel-ic:active { border-color: var(--cyan); background: var(--on); }
+
+.tel-av { flex: none; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; background: var(--off); border: 1px solid var(--red);
+  clip-path: polygon(25% 0, 100% 0, 100% 75%, 75% 100%, 0 100%, 0 25%); }
+.tel-av b { color: var(--cyan); font-size: 19px; font-weight: 700; }
+.tel-av.big { width: 112px; height: 112px; border-width: 2px; } .tel-av.big b { font-size: 54px; }
+
+.tel-net { margin-top: 10px; font-size: 13px; color: var(--red-dim); }
+.tel-net summary { cursor: pointer; letter-spacing: .06em; }
+.tel-net p { margin: 6px 0; }
+.tel-net input { display: block; width: 100%; margin: 4px 0; background: rgba(10, 11, 17, .8); border: 1px solid var(--red-dim); color: var(--light); font: 14px var(--mono); padding: 6px 8px; }
+
+.th-head { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--red-faint); }
+.th-back { font-size: 20px; padding: 0 10px; color: var(--cyan); }
+.th-name { flex: 1; font-weight: 700; color: var(--cyan); letter-spacing: .05em; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.th-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 8px 2px; -webkit-overflow-scrolling: touch; user-select: text; -webkit-user-select: text; }
+.tm { max-width: 80%; padding: 5px 9px 4px; font-size: 15px; line-height: 1.3; word-wrap: break-word; }
+.tm.them { align-self: flex-start; background: rgba(255, 94, 87, .1); border-left: 3px solid var(--red); }
+.tm.me { align-self: flex-end; background: rgba(94, 246, 255, .08); border-right: 3px solid var(--cyan); }
+.tm.fail { border-right-color: var(--red); }
+.tm-meta { font-size: 10px; color: var(--red-dim); margin-top: 2px; text-align: right; }
+.tm.call { align-self: center; max-width: none; font: 12px var(--mono); color: var(--cyan); border: 1px solid var(--on); padding: 3px 10px; }
+.tm.call.missed { color: var(--red); border-color: var(--off); }
+.th-form { display: flex; gap: 6px; padding: 6px 0 2px; border-top: 1px solid var(--red-faint); }
+.th-form input { flex: 1; min-width: 0; background: rgba(10, 11, 17, .8); border: 1px solid var(--red-dim); color: var(--light); font: 16px var(--font); padding: 7px 9px; user-select: text; -webkit-user-select: text; }
+.th-form input:focus { outline: none; border-color: var(--cyan); }
+.th-form button { background: var(--red); border: 0; color: var(--dark); font-weight: 700; letter-spacing: .05em; padding: 0 12px; }
+
+.tel-toast { position: fixed; z-index: 125; left: 10px; right: 10px; top: calc(var(--safe-t) + 50px); display: flex; gap: 10px; align-items: center;
+  background: #08161A; border: 1px solid var(--cyan); border-left: 5px solid var(--cyan); padding: 8px 10px; transition: opacity .4s; }
+.tel-toast .tt-i svg { width: 20px; height: 20px; fill: var(--cyan); display: block; }
+.tel-toast b { display: block; color: var(--cyan); font-size: 14px; letter-spacing: .06em; }
+.tel-toast span { color: var(--light); font-size: 14px; }
+.tel-toast.out { opacity: 0; }
+
+.callscr { position: fixed; inset: 0; z-index: 150; background: radial-gradient(circle at 50% 35%, #2A0A14, #07070D 70%); display: flex; flex-direction: column; align-items: center;
+  justify-content: space-between; padding: calc(var(--safe-t) + 30px) 16px calc(var(--safe-b) + 28px); overflow: hidden; }
+.callscr::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .035) 0 1px, transparent 1px 3px); }
+.call-remote { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+.callscr.has-video .call-remote { display: block; }
+.call-local { position: absolute; z-index: 2; right: 14px; top: calc(var(--safe-t) + 14px); width: 104px; height: 140px; object-fit: cover; border: 1px solid var(--cyan); display: none; background: #000; }
+.callscr.has-local .call-local { display: block; }
+.callscr.cam-off .call-local { opacity: .15; }
+.callscr .mirror { transform: scaleX(-1); }
+.call-card { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.call-kind { display: flex; align-items: center; gap: 6px; font: 12px var(--mono); color: var(--cyan); letter-spacing: .08em; }
+.call-kind svg { width: 14px; height: 14px; fill: currentColor; }
+.call-name { font-size: 30px; font-weight: 700; color: var(--red); letter-spacing: .06em; }
+.call-status { font: 14px var(--mono); color: var(--light); letter-spacing: .1em; min-height: 18px; }
+.call-time { color: var(--cyan); font-size: 16px; }
+.callscr.has-video .call-card { margin-top: auto; margin-bottom: 18px; background: rgba(7, 7, 13, .6); padding: 6px 14px; }
+.callscr.has-video .call-card .tel-av { display: none; }
+.callscr.has-video .call-name { font-size: 20px; }
+.callscr:not(.ended) .call-card .tel-av { animation: telpulse 1.6s ease-in-out infinite; }
+@keyframes telpulse { 50% { box-shadow: 0 0 0 0 transparent; filter: drop-shadow(0 0 12px rgba(94, 246, 255, .6)); } }
+.call-actions { position: relative; z-index: 1; display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+.cb { display: flex; flex-direction: column; align-items: center; gap: 5px; background: none; border: 0; color: var(--light); font-size: 12px; font-weight: 600; letter-spacing: .06em; padding: 0; }
+.cb svg { width: 30px; height: 30px; fill: currentColor; padding: 17px; box-sizing: content-box; border: 2px solid; clip-path: polygon(20% 0, 100% 0, 100% 80%, 80% 100%, 0 100%, 0 20%); }
+.cb.red svg { color: var(--light); background: #B3201C; border-color: var(--red); }
+.cb.green svg { color: var(--dark); background: var(--cyan); border-color: var(--cyan); }
+.cb.cyan svg { color: var(--cyan); border-color: var(--cyan); }
+.cb.ghost svg { color: var(--light); border-color: var(--red-dim); background: rgba(10, 11, 17, .6); }
+.cb.ghost.off svg { color: var(--dark); background: var(--light); }
+.callscr.ended .call-actions { visibility: hidden; }
+.callscr.ended .call-status { color: var(--red); }
+
+/* ---------- écrans d'appel entrant / sortant : détails ---------- */
+.callscr { animation: holoIn .45s steps(6, end); }
+@keyframes holoIn { 0% { opacity: 0; clip-path: inset(48% 0 48% 0); } 40% { opacity: 1; clip-path: inset(20% 0 30% 0); transform: translateX(-6px); }
+  60% { clip-path: inset(0 0 0 0); transform: translateX(4px); } 100% { transform: none; clip-path: inset(0 0 0 0); } }
+.callscr.gone { animation: holoOut .26s ease-in forwards; }
+@keyframes holoOut { to { opacity: 0; transform: scaleY(.02); } }
+.call-top { position: relative; z-index: 1; width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.call-ttl { width: 70%; height: 3px; background: var(--off); overflow: hidden; }
+.call-ttl i { display: block; height: 100%; width: 100%; background: var(--cyan); transition: width linear; }
+.callscr.outgoing .call-ttl, .callscr.answered .call-ttl, .callscr.ended .call-ttl { visibility: hidden; }
+.call-ring { position: relative; display: flex; align-items: center; justify-content: center; margin: 8px 0 4px; }
+.call-ring .rg { position: absolute; inset: -14px; border: 1px solid var(--cyan); opacity: 0;
+  clip-path: polygon(20% 0, 100% 0, 100% 80%, 80% 100%, 0 100%, 0 20%); }
+.callscr.incoming:not(.answered):not(.ended) .call-ring .rg, .callscr.outgoing.rang:not(.live):not(.ended) .call-ring .rg { animation: ringOut 1.8s ease-out infinite; }
+.call-ring .rg + .rg { animation-delay: .9s !important; }
+@keyframes ringOut { 0% { transform: scale(.85); opacity: .9; } 100% { transform: scale(1.45); opacity: 0; } }
+.callscr.outgoing .call-ring .rg { border-color: var(--red); }
+.call-info { font-size: 11px; color: var(--red-dim); letter-spacing: .08em; }
+.call-eq { display: flex; gap: 3px; align-items: flex-end; height: 18px; }
+.call-eq i { width: 3px; height: 4px; background: var(--cyan); }
+.callscr:not(.live):not(.ended) .call-eq i { animation: eqb .9s ease-in-out infinite; }
+.call-eq i:nth-child(2) { animation-delay: .1s !important; } .call-eq i:nth-child(3) { animation-delay: .25s !important; } .call-eq i:nth-child(4) { animation-delay: .05s !important; }
+.call-eq i:nth-child(5) { animation-delay: .3s !important; } .call-eq i:nth-child(6) { animation-delay: .15s !important; } .call-eq i:nth-child(7) { animation-delay: .2s !important; }
+@keyframes eqb { 50% { height: 18px; } }
+.callscr.live .call-eq, .callscr.ended .call-eq { visibility: hidden; }
+.callscr.outgoing .call-eq i { background: var(--red); }
+.call-bottom { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 18px; width: 100%; }
+.call-quick { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.call-quick .qr { background: rgba(10, 11, 17, .7); border: 1px solid var(--red-dim); color: var(--light); font-size: 13px; font-weight: 600; padding: 5px 10px; }
+.call-quick .qr:active { border-color: var(--cyan); color: var(--cyan); }
+.callscr.answered .call-quick, .callscr.ended .call-quick, .callscr.outgoing .call-quick { display: none; }
+.cb.small svg { width: 20px; height: 20px; padding: 13px; }
+.callscr.outgoing.is-video.has-local:not(.live) .call-local { inset: 0; width: 100%; height: 100%; border: 0; top: 0; right: 0; opacity: .55; }
+.callscr.outgoing.is-video.has-local:not(.live) .call-card { background: rgba(7, 7, 13, .55); padding: 10px 16px; }
+.callscr.retry .call-actions { visibility: visible; }
+.callscr.retry .call-status { color: var(--yellow); }

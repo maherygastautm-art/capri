@@ -1,0 +1,47 @@
+SONS DU TÉLÉPHONE CAPRI — tes propres fichiers
+==============================================
+
+Dépose ici des fichiers .mp3 avec EXACTEMENT ces noms. Chaque fichier remplace
+le son synthétisé du même rôle. S'il manque, l'appli garde le son synthétisé.
+
+  sonnerie.mp3    appel entrant (rejoué en boucle jusqu'à la réponse)
+  tonalite.mp3    appel sortant, pendant que ça sonne chez l'ami (en boucle)
+  connexion.mp3   l'appel vient de se connecter
+  fin.mp3         fin d'appel (raccroché, refusé, sans réponse)
+  message.mp3     nouveau message reçu
+  envoi.mp3       message envoyé
+
+Conseils
+--------
+- sonnerie et tonalite : 1 à 3 secondes. Elles sont rejouées en boucle :
+  coupe le silence au début et à la fin du fichier.
+- message et envoi : très courts (moins d'une demi-seconde).
+- Format .mp3 : c'est celui qui marche partout, iPhone compris.
+- Mets des fichiers de volume à peu près égal, sinon certains sons
+  sortiront beaucoup plus fort que d'autres.
+
+Où trouver des sons (voir references/planche-sons-appels-2077.html)
+-------------------------------------------------------------------
+Pixabay, Uppbeat, ElevenLabs, Soundstripe, Artlist… Mots-clés utiles :
+« sci-fi ringtone », « sci-fi UI », « hologram », « glitch notification ».
+
+IMPORTANT : licences
+--------------------
+- Vérifie la licence de chaque son : usage dans une appli, mention de
+  l'auteur obligatoire ou non (par exemple, la version gratuite d'ElevenLabs
+  demande de mentionner elevenlabs.io).
+- N'utilise pas de sons extraits de Cyberpunk 2077 ni des sites de
+  « sonneries Cyberpunk » : ce sont des fichiers du jeu, protégés par le
+  droit d'auteur.
+- Note ici d'où vient chaque son et sa licence, ça te servira si tu
+  publies l'appli :
+
+  sonnerie.mp3  :
+  tonalite.mp3  :
+  connexion.mp3 :
+  fin.mp3       :
+  message.mp3   :
+  envoi.mp3     :
+
+Pour tester : ouvre test-sons.html. Chaque son indique s'il vient de ton
+fichier ou du son synthétisé.

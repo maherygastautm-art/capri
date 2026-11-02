@@ -142,7 +142,10 @@ var C = window.C || (window.C = {});
     daysBeforeDecay: function () { var l = (data.iceStamp || now()) + WEEK - now(); return l <= 0 ? 0 : Math.ceil(l / 86400); },
     waitMinutes: function (b) { var w = (b.lastHack || 0) + COOLDOWN - now(); return w <= 0 ? 0 : Math.ceil(w / 60); },
     duelActive: function () { return duelActive || (C.intrusion && C.intrusion.active()); },
-    windowFor: function () { return 30; },   // même durée que le breach (app.js)
+    // pour pirater un ami, il faut réussir ROUNDS breachs d'affilée ; la fenêtre du duel couvre les trois
+    ROUNDS: 3,
+    windowFor: function () { return 30 * buddies.ROUNDS; },   // 30 s par breach (app.js)
+    attacking: function (b) { return !!pending && pending.b === b && pending.playing; },
     // j'attaque : l'ami reçoit l'écran d'intrusion (dur = ma fenêtre). Pendant ma partie, je guette son contre-piratage.
     attack: function (b) {
       var m = me('atk'); m.dur = buddies.windowFor(ice(b)); post(b.code, m);
@@ -272,13 +275,20 @@ var C = window.C || (window.C = {});
     if (!canHack(b)) { C.reply(name(b) + ' a désactivé les piratages entre amis.'); return; }
     var w = buddies.waitMinutes(b);
     if (w > 0) { C.reply('Son ICE est en alerte après ta dernière tentative. Réessaie dans ' + w + ' min.'); return; }
-    C.sys('connexion à l\'ICE de ' + name(b) + ' (niveau ' + ice(b) + ')...');
+    var R = buddies.ROUNDS, round = 1, total = 0;
+    C.sys('connexion à l\'ICE de ' + name(b) + ' (niveau ' + ice(b) + ') — ' + R + ' couches à percer...');
     buddies.attack(b);   // l'ami reçoit l'écran d'intrusion
-    C.game.start(ice(b), name(b), function (res, sec) {
-      // le verdict final vient de l'ami (il peut contre-pirater : le premier qui finit pirate l'autre)
-      if (!buddies.attackResult(b, res > 0, sec || 0)) return;
-      C.sys(res > 0 ? 'séquence injectée en ' + (sec || 0).toFixed(1) + ' s — en attente de ' + name(b) + '...' : (res === 0 ? 'netrun abandonné — en attente de ' + name(b) + '...' : 'breach raté — en attente de ' + name(b) + '...'));
-    });
+    // un piratage = R breachs réussis d'affilée ; le temps total est envoyé à l'ami
+    (function next() {
+      C.sys('couche ' + round + '/' + R + '...');
+      C.game.start(ice(b), name(b), function (res, sec) {
+        total += sec || 0;
+        if (res > 0 && round < R && buddies.attacking(b)) { C.sys('couche ' + round + '/' + R + ' percée.'); round++; next(); return; }
+        // le verdict final vient de l'ami (il peut contre-pirater : le premier qui finit pirate l'autre)
+        if (!buddies.attackResult(b, res > 0, total)) return;
+        C.sys(res > 0 ? 'les ' + R + ' couches sont percées en ' + total.toFixed(1) + ' s — en attente de ' + name(b) + '...' : (res === 0 ? 'netrun abandonné — en attente de ' + name(b) + '...' : 'breach raté — en attente de ' + name(b) + '...'));
+      });
+    })();
   };
   C.trainIce = function () {
     if (data.ice >= 10) { C.reply('Ton ICE est déjà au niveau maximum. Aucun netrunner ne passe.'); return; }
