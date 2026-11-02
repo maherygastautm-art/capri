@@ -236,6 +236,9 @@ var C = window.C || (window.C = {});
         if (age < 120) { sfx.play('msg'); toast(nameOf(from), o.text, function () { openPhone(); openThread(from); }); notifySystem('Message de ' + nameOf(from), o.text); }
       } else sfx.play('msg');
       refresh();
+    } else if (o.t === 'avatar') {
+      var fb = friend(from);
+      if (fb && C.avatar && C.avatar.valid(o.img) && (o.v || 0) >= (fb.avatarV || 0)) { fb.avatar = o.img; fb.avatarV = o.v || 0; saveSoon(); refresh(); }
     } else if (o.t === 'call') {
       if (age > RING_MAX) { logCall({ id: o.id, peer: from, video: o.video, dir: 'in', at: o.at || at * 1000 }, 'missed'); return; }
       if (call) { if (call.id !== o.id) send(from, { t: 'busy', id: o.id }); return; }
@@ -445,11 +448,15 @@ var C = window.C || (window.C = {});
     msg: '<svg viewBox="0 0 24 24"><path d="M3 4h18v12H8l-5 4z"/></svg>',
     mic: '<svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zm-7 9h2a5 5 0 0 0 10 0h2a7 7 0 0 1-6 6.9V22h-2v-3.1A7 7 0 0 1 5 12z"/></svg>',
     flip: '<svg viewBox="0 0 24 24"><path d="M4 7h11l-3-3 1.4-1.4L19 8l-5.6 5.4L12 12l3-3H4zm16 10H9l3 3-1.4 1.4L5 16l5.6-5.4L12 12l-3 3h11z"/></svg>',
+    edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zm12.5-16.5 4 4L22 6l-4-4z"/></svg>',
     mute: '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-5v16l-5-5H4zm12.6.4L18 8l2 2 2-2 1.4 1.4-2 2 2 2L22 14.8l-2-2-2 2-1.4-1.4 2-2z"/></svg>',
     end: '<svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.1.3-4.6.7v3.1c0 .4-.2.7-.6.9-.9.4-1.8 1-2.5 1.7-.2.2-.4.3-.7.3s-.5-.1-.7-.3L.3 12.9a1 1 0 0 1 0-1.4C3.4 8.6 7.5 7 12 7s8.6 1.6 11.7 4.5c.4.4.4 1 0 1.4l-2.5 2.5c-.2.2-.4.3-.7.3s-.5-.1-.7-.3c-.7-.7-1.6-1.3-2.5-1.7-.4-.2-.6-.5-.6-.9V9.7C15.1 9.3 13.6 9 12 9z"/></svg>'
   };
+  // photo de profil de l'ami (ou la mienne) si elle existe, sinon l'initiale
   function avatar(code, cls) {
-    var n = nameOf(code), b = friend(code);
+    var mine = code === me(), b = mine ? null : friend(code), n = mine ? (data.userName || 'MOI') : nameOf(code);
+    var img = mine ? data.avatar && data.avatar.img : b && b.avatar;
+    if (img && C.avatar && C.avatar.valid(img)) return '<span class="tel-av has-img ' + (cls || '') + '"><img alt="" src="' + img + '"></span>';
     return '<span class="tel-av ' + (cls || '') + '" data-skin="' + esc(b && b.skin || '') + '"><b>' + esc((n[0] || '?').toUpperCase()) + '</b></span>';
   }
   function showCall() {
@@ -588,6 +595,12 @@ var C = window.C || (window.C = {});
 
   function renderContacts(body) {
     var list = data.buddies.slice().sort(function (a, b) { return nameOf(a.code).localeCompare(nameOf(b.code)); });
+    // ma fiche : ma photo de profil, que mes amis voient dans leurs contacts et leurs appels
+    var mine = el('button', 'tel-row me', avatar(me()) + '<div class="tr-main"><div class="tr-name"></div><div class="tr-sub">MON PROFIL · touche pour changer ta photo</div></div><span class="tel-ic">' + ICON.edit + '</span>');
+    mine.type = 'button';
+    mine.querySelector('.tr-name').textContent = (data.userName || 'MOI').toUpperCase();
+    mine.addEventListener('click', function () { C.avatar.pick(render); });
+    body.appendChild(mine);
     if (!list.length) {
       body.appendChild(el('div', 'tel-empty', 'Pas encore d\'amis dans ton répertoire.<br>Donne ton code ami, ou tape dans le chat : « ami AMI-XXXX-XXXX ».'));
     }
@@ -653,9 +666,24 @@ var C = window.C || (window.C = {});
     list.scrollTop = list.scrollHeight;
   }
 
+  // ma photo de profil part chez chaque ami qui n'a pas encore la dernière version (nouvel ami compris)
+  var avatarBusy = false, avatarLast = 0;
+  function syncAvatars(force) {
+    var av = data.avatar;
+    if (!av || !av.small || avatarBusy || (!force && Date.now() - avatarLast < 60000)) return;
+    if (!data.avatarSent || typeof data.avatarSent !== 'object') data.avatarSent = {};
+    var todo = data.buddies.filter(function (b) { return data.avatarSent[b.code] !== av.v; });
+    if (!todo.length) return;
+    avatarBusy = true; avatarLast = Date.now();
+    todo.reduce(function (p, b) {
+      return p.then(function () { return send(b.code, { t: 'avatar', img: av.small, v: av.v }).then(function (ok) { if (ok) data.avatarSent[b.code] = av.v; }); });
+    }, Promise.resolve()).then(function () { avatarBusy = false; saveSoon(); });
+  }
+
   C.phone = {
     open: openPhone, dial: dial, thread: openThread, sfx: sfx,
-    start: function () { listen(); refresh(); var a = ac(); if (a) loadFiles(a); }
+    start: function () { listen(); refresh(); var a = ac(); if (a) loadFiles(a); setTimeout(function () { syncAvatars(true); }, 6000); setInterval(syncAvatars, 120000); },
+    avatarChanged: function () { syncAvatars(true); refresh(); }
   };
 
   function init() {
