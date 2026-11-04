@@ -205,6 +205,8 @@ var C = window.C || (window.C = {});
     ['combien font 12 * 8', 'Calculs'],
     ['ouvre youtube', 'Ouvre un site (youtube, twitch, netflix...)'],
     ['cherche recette de crêpes', 'Recherche Google (« youtube lofi » pour YouTube)'],
+    ["c'est quoi un trou noir ?", 'Question : Capri cherche et résume la réponse (Google si clé, DuckDuckGo, Wikipédia)'],
+    ['clé google CLÉ CX', 'Facultatif : utiliser ta clé gratuite Google Custom Search'],
     ['traduis bonjour en anglais', 'Traduction'],
     ['quelle heure est-il', 'Heure et date'],
     ['viens ici / danse / éclair', 'Animations'],

@@ -170,6 +170,74 @@ var C = window.C || (window.C = {});
   function open(url) { window.open(url, '_blank'); }
   function google(q) { open('https://www.google.com/search?q=' + encodeURIComponent(q)); }
 
+  // ---------- mini IA : répond aux questions avec le web (sans compte) ----------
+  // Sources : Google (si une clé gratuite est réglée : « clé google CLÉ CX »), puis DuckDuckGo, puis Wikipédia.
+  // done({ text, src, url }) ou done(null) si rien de fiable.
+  function topic(q) {
+    var s = q.toLowerCase().replace(/[’']/g, ' ').replace(/[?!.]+/g, ' ').replace(/\s+/g, ' ').trim();
+    s = s.replace(/^((hey|dis|ok) )?capri,? /, '');
+    s = s.replace(/^(dis moi |explique moi |explique |sais tu |tu sais |est ce que tu sais )/, '');
+    s = s.replace(/^(c est quoi|c etait quoi|c était quoi|qu est ce que c est que|qu est ce que c est|qu est ce qu|qu est ce que|qui est|qui était|qui etait|qui sont|que veut dire|que signifie|définition de|definition de|définis|definis|parle moi de|quel est|quelle est|quels sont|quelles sont|où se trouve|ou se trouve|où est|ou est)\s+/, '');
+    s = s.replace(/^(le|la|les|l|un|une|des|du|de|d)\s+/, '');
+    return s.trim() || q;
+  }
+  // mots importants de la question (sans accents ni petits mots) : pour chercher et vérifier que la réponse en parle
+  var STOP = /^(a|au|aux|de|des|du|d|le|la|les|l|un|une|et|ou|en|est|sont|il|elle|ils|elles|on|y|ce|ces|cet|cette|qui|que|quoi|qu|quel|quelle|quels|quelles|combien|comment|pourquoi|quand|dans|sur|pour|par|avec|ont|fait|faire|ai|as|mon|ma|mes|ton|ta|tes|son|sa|ses)$/;
+  function keywords(q) { return C.norm(q).split(' ').filter(function (w) { return w.length > 1 && !STOP.test(w); }); }
+  function relevant(q, a) {
+    var hay = C.norm(a.title + ' ' + a.text), kw = keywords(q);
+    if (!kw.length) return true;
+    return kw.some(function (w) { return hay.indexOf(w.length > 5 ? w.slice(0, w.length - 1) : w) >= 0; });
+  }
+  function brief(t) {
+    t = String(t || '').replace(/\s+/g, ' ').trim();
+    var parts = t.match(/[^.!?]+[.!?]+(\s|$)/g) || [t], out = '';
+    for (var i = 0; i < parts.length && i < 2; i++) { if (out && (out + parts[i]).length > 320) break; out += parts[i]; }
+    out = out.trim() || t;
+    return out.length > 340 ? out.slice(0, 337) + '...' : out;
+  }
+  function getJson(url) {
+    var ctl = window.AbortController ? new AbortController() : null;
+    if (ctl) setTimeout(function () { ctl.abort(); }, 7000);
+    return fetch(url, ctl ? { signal: ctl.signal } : {}).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+  }
+  function fromGoogle(q) {
+    var k = data.cfg.googleKey, cx = data.cfg.googleCx;
+    if (!k || !cx) return Promise.resolve(null);
+    return getJson('https://www.googleapis.com/customsearch/v1?num=3&lr=lang_fr&key=' + encodeURIComponent(k) + '&cx=' + encodeURIComponent(cx) + '&q=' + encodeURIComponent(q))
+      .then(function (d) { var it = d.items && d.items[0]; return it && it.snippet ? { text: brief(it.snippet), src: 'Google', url: it.link } : null; });
+  }
+  function fromDdg(q) {
+    return getJson('https://api.duckduckgo.com/?format=json&no_html=1&skip_disambig=1&kl=fr-fr&q=' + encodeURIComponent(q))
+      .then(function (d) {
+        if (d.Answer && typeof d.Answer === 'string') return { text: brief(d.Answer), src: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=' + encodeURIComponent(q) };
+        if (d.AbstractText) return { text: brief(d.AbstractText), src: d.AbstractSource || 'DuckDuckGo', url: d.AbstractURL };
+        if (d.Definition) return { text: brief(d.Definition), src: d.DefinitionSource || 'DuckDuckGo', url: d.DefinitionURL };
+        return null;
+      });
+  }
+  // Wikipédia : d'abord avec la phrase, puis avec les seuls mots importants si la première page ne parle pas du sujet
+  function fromWiki(q) { return wiki(q); }
+  function fromWikiKw(q) { var k = keywords(q).join(' '); return k && k !== q ? wiki(k) : Promise.resolve(null); }
+  function wiki(q) {
+    return getJson('https://fr.wikipedia.org/w/api.php?action=query&list=search&srlimit=1&format=json&origin=*&srsearch=' + encodeURIComponent(q))
+      .then(function (d) {
+        var hit = d.query && d.query.search && d.query.search[0];
+        if (!hit) return null;
+        return getJson('https://fr.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(hit.title.replace(/ /g, '_'))).then(function (s) {
+          if (!s.extract || s.type === 'disambiguation') return null;
+          return { title: hit.title, text: brief(s.extract), src: 'Wikipédia', url: s.content_urls && s.content_urls.desktop ? s.content_urls.desktop.page : 'https://fr.wikipedia.org/wiki/' + encodeURIComponent(hit.title) };
+        });
+      });
+  }
+  C.webAnswer = function (question, done) {
+    var q = topic(question), srcs = [fromGoogle, fromDdg, fromWiki, fromWikiKw], i = 0;
+    (function next() {
+      if (i >= srcs.length) { done(null); return; }
+      srcs[i++](q).then(function (a) { if (a && a.text && relevant(q, { title: a.title || '', text: a.text })) done(a); else next(); }, next);
+    })();
+  };
+
   C.handle = function (raw) {
     var text = raw.trim();
     if (!text) return;
@@ -198,13 +266,28 @@ var C = window.C || (window.C = {});
       if (/^(non|nan|no|nope|laisse tomber|annule|pas la peine)$/.test(n)) { reply('Ok, laisse tomber.'); return; }
     }
     if (!n) { C.stage.wave(); reply(P('call', 'Oui ?', "Je t'écoute.")); return; }
+    // clé gratuite de Google (Custom Search JSON API) : « clé google CLÉ CX », « clé google off » pour l'enlever
+    var gk = text.match(/^cl[ée] google\s+(\S+)(?:\s+(\S+))?\s*$/i);
+    if (gk) {
+      if (/^(off|aucune|supprime)$/i.test(gk[1])) { data.cfg.googleKey = data.cfg.googleCx = ''; C.save(); reply('Clé Google retirée. Je cherche avec DuckDuckGo et Wikipédia.'); return; }
+      if (!gk[2]) { reply('Il me faut la clé ET l\'identifiant du moteur : « clé google CLÉ CX ».'); return; }
+      data.cfg.googleKey = gk[1]; data.cfg.googleCx = gk[2]; C.save();
+      reply('Clé Google enregistrée. Je cherche d\'abord sur Google maintenant.'); return;
+    }
     if (tryLocal(n, text)) return;
 
-    // incompris
+    // incompris : une question ? Capri cherche la réponse sur le web et la résume
+    var question = text.indexOf('?') >= 0 || /^(qui|quoi|que|qu est|comment|pourquoi|quand|ou|combien|quel|quelle|quels|quelles|est ce|c est quoi|explique|definition|dis moi|parle moi)\b/.test(n);
+    if (question) {
+      reply(P('websearch', 'Je fouille le net...', 'Deux secondes, je cherche.'));
+      C.webAnswer(text, function (a) {
+        if (!a) { ask(P('askgoogle', "J'ai rien trouvé de fiable. Je cherche sur Google ? (oui / non)"), function () { google(text); reply("C'est parti."); }); return; }
+        ask(a.text + ' (source : ' + a.src + ') — Tu veux la page complète ? (oui / non)', function () { open(a.url); reply("C'est parti."); });
+      });
+      return;
+    }
     C.showError();
-    var question = text.indexOf('?') >= 0 || /^(qui|quoi|que|qu est|comment|pourquoi|quand|ou|combien|quel|quelle|quels|quelles|est ce|c est quoi|explique|definition)\b/.test(n);
-    if (question) ask(P('askgoogle', 'Ça, je sais pas y répondre toute seule. Je cherche sur Google ? (oui / non)'), function () { google(text); reply("C'est parti."); });
-    else reply(P('unknown', 'Je connais pas cette commande. Tape « aide » pour voir ce que je sais faire.'));
+    reply(P('unknown', 'Je connais pas cette commande. Tape « aide » pour voir ce que je sais faire.'));
   };
 
   function tryCalc(raw) {
