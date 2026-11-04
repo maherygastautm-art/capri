@@ -171,7 +171,7 @@ var C = window.C || (window.C = {});
   function google(q) { open('https://www.google.com/search?q=' + encodeURIComponent(q)); }
 
   // ---------- mini IA : répond aux questions avec le web (sans compte) ----------
-  // Sources : Google (si une clé gratuite est réglée : « clé google CLÉ CX »), puis DuckDuckGo, puis Wikipédia.
+  // Sources de secours de l'IA : DuckDuckGo puis Wikipédia.
   // done({ text, src, url }) ou done(null) si rien de fiable.
   function topic(q) {
     var s = q.toLowerCase().replace(/[’']/g, ' ').replace(/[?!.]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -201,12 +201,6 @@ var C = window.C || (window.C = {});
     if (ctl) setTimeout(function () { ctl.abort(); }, 7000);
     return fetch(url, ctl ? { signal: ctl.signal } : {}).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
   }
-  function fromGoogle(q) {
-    var k = data.cfg.googleKey, cx = data.cfg.googleCx;
-    if (!k || !cx) return Promise.resolve(null);
-    return getJson('https://www.googleapis.com/customsearch/v1?num=3&lr=lang_fr&key=' + encodeURIComponent(k) + '&cx=' + encodeURIComponent(cx) + '&q=' + encodeURIComponent(q))
-      .then(function (d) { var it = d.items && d.items[0]; return it && it.snippet ? { text: brief(it.snippet), src: 'Google', url: it.link } : null; });
-  }
   function fromDdg(q) {
     return getJson('https://api.duckduckgo.com/?format=json&no_html=1&skip_disambig=1&kl=fr-fr&q=' + encodeURIComponent(q))
       .then(function (d) {
@@ -230,8 +224,43 @@ var C = window.C || (window.C = {});
         });
       });
   }
+  // ---------- vraie IA : Pollinations.ai (gratuit, sans compte ni clé, 1 réponse / 45 s par connexion) ----------
+  // done(texte) ou done(null) si l'IA ne répond pas ; wait(secondes) prévient quand il faut patienter
+  var aiHistory = [];
+  function aiSystem() {
+    var p = "Tu es Capri, une IA de compagnie au style cyberpunk (Night City), dans une petite appli. " +
+      "Tu tutoies, tu réponds en français, de façon juste, directe et naturelle, en 1 à 3 phrases courtes, sans markdown. " +
+      "Si tu ne sais pas, dis-le simplement. Ne mentionne jamais Google, ni le modèle ou l'entreprise derrière toi.";
+    if (data.userName) p += " La personne s'appelle " + data.userName + ".";
+    return p;
+  }
+  C.ai = function (text, done, wait) {
+    var msgs = [{ role: 'system', content: aiSystem() }].concat(aiHistory.slice(-6), [{ role: 'user', content: text }]), tries = 0;
+    (function go() {
+      var ctl = window.AbortController ? new AbortController() : null;
+      if (ctl) setTimeout(function () { ctl.abort(); }, 30000);
+      fetch('https://text.pollinations.ai/openai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'openai', messages: msgs }), signal: ctl ? ctl.signal : undefined })
+        .then(function (r) { return r.json().catch(function () { return {}; }); })
+        .then(function (d) {
+          var e = d && d.error, after = JSON.stringify(e || '').match(/after (\d+)\s*s/i);
+          // limite gratuite : on patiente puis on réessaie une fois
+          if (e && /FREE_LIMIT|limit/i.test(JSON.stringify(e)) && tries++ < 1) {
+            var sec = Math.min(50, Math.max(2, after ? parseInt(after[1], 10) + 1 : 46));
+            if (wait) wait(sec);
+            setTimeout(go, sec * 1000); return;
+          }
+          var out = d && d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
+          if (!out) { done(null); return; }
+          out = String(out).replace(/[*_#`]+/g, '').trim();
+          aiHistory.push({ role: 'user', content: text }, { role: 'assistant', content: out });
+          if (aiHistory.length > 12) aiHistory = aiHistory.slice(-12);
+          done(out);
+        }, function () { done(null); });
+    })();
+  };
+
   C.webAnswer = function (question, done) {
-    var q = topic(question), srcs = [fromGoogle, fromDdg, fromWiki, fromWikiKw], i = 0;
+    var q = topic(question), srcs = [fromDdg, fromWiki, fromWikiKw], i = 0;
     (function next() {
       if (i >= srcs.length) { done(null); return; }
       srcs[i++](q).then(function (a) { if (a && a.text && relevant(q, { title: a.title || '', text: a.text })) done(a); else next(); }, next);
@@ -266,28 +295,17 @@ var C = window.C || (window.C = {});
       if (/^(non|nan|no|nope|laisse tomber|annule|pas la peine)$/.test(n)) { reply('Ok, laisse tomber.'); return; }
     }
     if (!n) { C.stage.wave(); reply(P('call', 'Oui ?', "Je t'écoute.")); return; }
-    // clé gratuite de Google (Custom Search JSON API) : « clé google CLÉ CX », « clé google off » pour l'enlever
-    var gk = text.match(/^cl[ée] google\s+(\S+)(?:\s+(\S+))?\s*$/i);
-    if (gk) {
-      if (/^(off|aucune|supprime)$/i.test(gk[1])) { data.cfg.googleKey = data.cfg.googleCx = ''; C.save(); reply('Clé Google retirée. Je cherche avec DuckDuckGo et Wikipédia.'); return; }
-      if (!gk[2]) { reply('Il me faut la clé ET l\'identifiant du moteur : « clé google CLÉ CX ».'); return; }
-      data.cfg.googleKey = gk[1]; data.cfg.googleCx = gk[2]; C.save();
-      reply('Clé Google enregistrée. Je cherche d\'abord sur Google maintenant.'); return;
-    }
     if (tryLocal(n, text)) return;
 
-    // incompris : une question ? Capri cherche la réponse sur le web et la résume
-    var question = text.indexOf('?') >= 0 || /^(qui|quoi|que|qu est|comment|pourquoi|quand|ou|combien|quel|quelle|quels|quelles|est ce|c est quoi|explique|definition|dis moi|parle moi)\b/.test(n);
-    if (question) {
-      reply(P('websearch', 'Je fouille le net...', 'Deux secondes, je cherche.'));
-      C.webAnswer(text, function (a) {
-        if (!a) { ask(P('askgoogle', "J'ai rien trouvé de fiable. Je cherche sur Google ? (oui / non)"), function () { google(text); reply("C'est parti."); }); return; }
-        ask(a.text + ' (source : ' + a.src + ') — Tu veux la page complète ? (oui / non)', function () { open(a.url); reply("C'est parti."); });
+    // pas une commande : c'est l'IA qui répond (secours : résumé DuckDuckGo / Wikipédia)
+    C.stage.talkFor(1.5);
+    C.ai(text, function (a) {
+      if (a) { reply(a); return; }
+      C.webAnswer(text, function (w) {
+        if (w) reply(w.text);
+        else { C.showError(); reply(P('aidown', "Mon module d'IA ne répond pas, et je trouve rien de fiable. Réessaie dans une minute.")); }
       });
-      return;
-    }
-    C.showError();
-    reply(P('unknown', 'Je connais pas cette commande. Tape « aide » pour voir ce que je sais faire.'));
+    }, function (sec) { reply(P('aiwait', 'Je reprends mon souffle... réponse dans {0} s.').replace('{0}', sec)); });
   };
 
   function tryCalc(raw) {
